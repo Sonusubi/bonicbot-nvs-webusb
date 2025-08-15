@@ -397,16 +397,24 @@
 
       const manifest = {
         name: "BonicBot NVS",
-        build: {
-          chipFamily: "ESP32-S3",
-          parts: [
-            { path: url, offset: nvs_offset }
-          ]
-        }
+        version: "1.0.0",
+        builds: [
+          {
+            chipFamily: "ESP32-S3",
+            parts: [
+              { path: url, offset: parseInt(nvs_offset, 16) }
+            ]
+          }
+        ]
       };
 
+      // Create a Blob URL for the manifest
+      const manifestJson = JSON.stringify(manifest);
+      const manifestBlob = new Blob([manifestJson], {type: "application/json"});
+      const manifestUrl = URL.createObjectURL(manifestBlob);
+
       const nvsBtn = document.getElementById('nvs-web-btn');
-      nvsBtn.manifest = manifest;
+      nvsBtn.manifest = manifestUrl;
 
       const wrap = el('nvs-web-progress-wrap');
       const bar  = el('nvs-web-progress-bar');
@@ -441,10 +449,16 @@
             setSmall('nvs-web-status','Status: Complete');
             wrap.style.display = 'block'; bar.style.width = '100%';
             setTimeout(()=>{ wrap.style.display='none'; bar.style.width='0%'; }, 1800);
+            // Clean up the blob URL
+            URL.revokeObjectURL(manifestUrl);
+            URL.revokeObjectURL(url);
             break;
           case 'ERROR':
             setSmall('nvs-web-status','Status: Failed');
             wrap.style.display = 'none'; bar.style.width = '0%';
+            // Clean up the blob URL on error too
+            URL.revokeObjectURL(manifestUrl);
+            URL.revokeObjectURL(url);
             break;
         }
       }, { once:false });
