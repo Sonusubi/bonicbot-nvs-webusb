@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🤖 BonicBot — NVS Generator & Flasher</title>
+
+  <!-- esp-web-tools (firmware flasher buttons) -->
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+
+  <!-- Icons + font -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0b1020;
+      --card:#0f1724;
+      --muted:#98a0b3;
+      --accent:#39b54a;
+      --danger:#ff6b6b;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family:Inter,system-ui,Segoe UI,Roboto,Arial;
+      background: linear-gradient(180deg, #071024 0%, #081226 50%, #051020 100%);
+      color:#e6eef8;
+      padding:28px;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      gap:20px;
+      padding-bottom:60px;
+    }
+
+    .wrap{
+      width:1100px;
+      max-width:calc(100% - 40px);
+      display:grid;
+      grid-template-columns: 1fr 420px;
+      gap:20px;
+      align-items:start;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border:1px solid rgba(255,255,255,0.03);
+      border-radius:12px;
+      padding:20px;
+      box-shadow: 0 6px 24px rgba(2,6,23,0.6);
+    }
+
+    header.site {
+      grid-column: 1 / -1;
+      display:flex;
+      align-items:center;
+      gap:18px;
+      padding:18px 22px;
+      margin-bottom:8px;
+      background: linear-gradient(90deg,#061424, #0b1830);
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    .brand {
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    .logo {
+      width:54px;height:54px;border-radius:10px;background:#fff;color:#000;display:grid;place-items:center;font-weight:800;
+    }
+    .title { font-weight:700; font-size:1.2rem; }
+    .subtitle { color:var(--muted); font-size:0.9rem; margin-top:4px }
+
+    h3 { margin:0 0 12px 0; font-size:1.05rem; }
+    label { display:block; font-size:0.85rem; color:var(--muted); margin-bottom:6px; }
+    input[type="text"], input[type="password"], select {
+      width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:transparent; color:inherit;
+      font-size:0.95rem; margin-bottom:12px;
+    }
+    .row { display:flex; gap:12px; }
+    .col { flex:1; }
+
+    .btn {
+      display:inline-flex; align-items:center; gap:10px; padding:10px 14px; border-radius:8px; cursor:pointer;
+      font-weight:700; border:none;
+    }
+    .btn.primary { background:linear-gradient(90deg,var(--accent), #2fa13f); color:#02120a; }
+    .btn.ghost { background:transparent; border:1px solid rgba(255,255,255,0.04); color:#e6eef8; }
+    .btn.warn { background:linear-gradient(90deg,#ff9a9a,var(--danger)); color:#111; }
+
+    .small { font-size:0.85rem; color:var(--muted) }
+
+    .tools-list .item { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed rgba(255,255,255,0.02) }
+    .status-ind { padding:6px 10px; border-radius:999px; font-weight:700; font-size:0.78rem; }
+
+    .ok { background:var(--accent); color:#031607 }
+    .bad { background:#c73d3d; color:#fff }
+
+    .progress {
+      height:12px; background: rgba(255,255,255,0.04); border-radius:8px; overflow:hidden; margin-top:10px;
+      border:1px solid rgba(255,255,255,0.02)
+    }
+    .progress > div { height:100%; width:0%; background: linear-gradient(90deg,#7ee37e,#39b54a); transition:width .4s ease; }
+
+    .muted-box { background: rgba(255,255,255,0.02); padding:10px;border-radius:8px; color:var(--muted); font-size:0.9rem; }
+
+    footer { grid-column:1/-1; text-align:center; color:var(--muted); margin-top:8px; font-size:0.85rem }
+    @media (max-width:1120px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+
+    #nvs-flash-wrap { display:none; margin-top:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site card">
+      <div class="brand">
+        <div class="logo">BB</div>
+        <div>
+          <div class="title">BonicBot — NVS Generator & Flasher</div>
+          <div class="subtitle">Generate NVS binaries, download or flash them directly to ESP32-S3. Includes firmware flasher (esp-web-tools).</div>
+        </div>
+      </div>
+      <div style="margin-left:auto; text-align:right;">
+        <div class="small">Server: Flask API</div>
+        <div class="small" id="server-clock"></div>
+      </div>
+    </header>
+
+    <!-- Left column: generator & controls -->
+    <section class="card">
+      <h3>⚡ Generate & Flash (single device)</h3>
+
+      <div class="row">
+        <div class="col">
+          <label for="device_id">Device ID *</label>
+          <input id="device_id" name="device_id" type="text" placeholder="BonicBotA1002" value="BonicBotA1002" />
+        </div>
+        <div class="col">
+          <label for="wifi_ssid">WiFi SSID *</label>
+          <input id="wifi_ssid" name="wifi_ssid" type="text" placeholder="Your WiFi SSID" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label for="wifi_password">WiFi Password (optional)</label>
+          <input id="wifi_password" name="wifi_password" type="password" placeholder="••••••••" />
+        </div>
+        <div class="col">
+          <label for="api_endpoint">API Endpoint (optional)</label>
+          <input id="api_endpoint" name="api_endpoint" type="text" placeholder="https://api.bonicbot.com" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:8px;">
+        <div style="flex:1;">
+          <label for="serial_port">Serial Port (for manual CLI only)</label>
+          <select id="serial_port">
+            <option value="">Detecting ports...</option>
+          </select>
+        </div>
+        <div style="width:140px">
+          <label for="baud_rate">Baud (CLI)</label>
+          <select id="baud_rate">
+            <option value="115200">115200</option>
+            <option value="460800" selected>460800</option>
+            <option value="921600">921600</option>
+          </select>
+        </div>
+        <div style="width:120px">
+          <label for="nvs_offset">NVS offset</label>
+          <input id="nvs_offset" type="text" value="0x9000" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button id="btn-refresh-ports" class="btn ghost">🔄 Refresh Ports</button>
+        <button id="btn-generate-download" class="btn primary">💾 Generate & Download</button>
+        <button id="btn-generate-flash" class="btn warn">⚡ Generate & Flash</button>
+      </div>
+
+      <!-- NVS WebUSB flash section (appears after generate) -->
+      <div id="nvs-flash-wrap" class="muted-box">
+        <div class="small" style="margin-bottom:6px">NVS file is ready. Click below to flash via browser (WebUSB).</div>
+        <esp-web-install-button id="nvs-web-btn">
+          <button slot="activate" class="btn primary" style="width:100%; justify-content:center;">
+            <i class="fas fa-bolt" style="margin-right:8px"></i>Flash NVS to Device (WebUSB)
+          </button>
+        </esp-web-install-button>
+        <div class="small" id="nvs-web-status" style="margin-top:8px;">Status: Waiting</div>
+        <div class="progress" style="margin-top:8px; display:none" id="nvs-web-progress-wrap"><div id="nvs-web-progress-bar" style="width:0%"></div></div>
+      </div>
+
+      <div id="tools" style="margin-top:18px;">
+        <h3 style="margin-bottom:8px">🔧 Tools & Status</h3>
+        <div class="tools-list muted-box" id="tools-list">
+          Checking installed tools...
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="small">Manual flash command (if you downloaded the .bin):</div>
+        <div class="muted-box" style="margin-top:8px; font-family:monospace; font-size:0.9rem;">
+          esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 460800 write_flash 0x9000 device_nvs.bin
+        </div>
+      </div>
+    </section>
+
+    <!-- Right column: firmware flasher + quick generate -->
+    <aside class="card">
+      <h3>🔁 Firmware Flasher</h3>
+      <div class="small" style="margin-bottom:12px;">Use esp-web-tools to install firmware via browser. Make sure device is connected.</div>
+
+      <esp-web-install-button manifest="/static/manifest.json">
+        <button slot="activate" class="btn primary" style="width:100%; justify-content:center;">
+          <i class="fas fa-upload" style="margin-right:8px"></i>Install Firmware (manifest.json)
+        </button>
+      </esp-web-install-button>
+
+      <div style="margin-top:12px;">
+        <div id="fw-status" class="small">Status: Ready</div>
+        <div class="progress" style="margin-top:10px; display:none" id="fw-progress-wrap"><div id="fw-progress-bar" style="width:0%"></div></div>
+      </div>
+
+      <hr style="margin:16px 0; border:0; border-top:1px solid rgba(255,255,255,0.03)" />
+
+      <h3>Quick Generate</h3>
+      <div class="small" style="margin-bottom:8px">Quick create an NVS binary and download it (pre-fills with current fields).</div>
+      <button id="btn-quick-generate" class="btn ghost" style="width:100%; margin-top:8px;">💾 Quick Generate</button>
+    </aside>
+
+    <footer class="small">BonicBot NVS tool • Flask backend • For Generate & Flash (NVS) we use WebUSB (no server serial access required).</footer>
+  </div>
+
+<script>
+  const el = (id)=> document.getElementById(id);
+  const setSmall = (id, txt)=> { const e = el(id); if(e) e.textContent = txt; };
+
+  // Server clock
+  setInterval(()=> { el('server-clock').textContent = new Date().toLocaleString(); }, 1000);
+
+  // Ports & Tools
+  async function refreshPorts() {
+    const sel = el('serial_port');
+    sel.innerHTML = '<option>Detecting ports...</option>';
+    try {
+      const res = await fetch('/api/list-ports');
+      if(!res.ok) throw new Error('Port API error');
+      const data = await res.json();
+      sel.innerHTML = '<option value="">(Optional) Select Port for CLI…</option>';
+
+      const summary = document.createElement('option');
+      summary.disabled = true;
+      summary.textContent = `Found ${data.esp_count} ESP device(s), ${data.total_count} total`;
+      sel.appendChild(summary);
+
+      if(data.ports && data.ports.length){
+        const espPorts = data.ports.filter(p=>p.is_esp_device);
+        const others = data.ports.filter(p=>!p.is_esp_device);
+        if(espPorts.length){
+          const g = document.createElement('optgroup'); g.label = `🔥 ESP Devices (${espPorts.length})`;
+          espPorts.forEach(p=>{
+            const o = document.createElement('option');
+            o.value = p.device;
+            o.textContent = `${p.device} — ${p.esp_type || p.description}`;
+            g.appendChild(o);
+          });
+          sel.appendChild(g);
+        }
+        if(others.length){
+          const g2 = document.createElement('optgroup'); g2.label = `Other (${others.length})`;
+          others.forEach(p=>{
+            const o = document.createElement('option');
+            o.value = p.device;
+            o.textContent = `${p.device} — ${p.description}`;
+            g2.appendChild(o);
+          });
+          sel.appendChild(g2);
+        }
+      } else {
+        sel.innerHTML = '<option value="">❌ No devices found</option>';
+      }
+    } catch(err){
+      sel.innerHTML = '<option value="">Error detecting ports</option>';
+      console.error(err);
+    }
+  }
+
+  async function checkTools(){
+    const box = el('tools-list');
+    box.textContent = 'Checking required tools...';
+    try {
+      const res = await fetch('/api/validate-tools');
+      if(!res.ok) throw new Error('Tool validation failed');
+      const data = await res.json();
+
+      let html = '';
+      const tools = [
+        {key:'esp_idf_nvs_partition_gen', label:'ESP-IDF NVS generator (python3 -m)'},
+        {key:'esp_idf_nvs_partition_gen_py', label:'ESP-IDF NVS generator (python -m)'},
+        {key:'nvs_partition_gen_global', label:'nvs_partition_gen (global)'},
+        {key:'esptool', label:'esptool.py (optional for manual CLI)'},
+      ];
+      tools.forEach(t=>{
+        const ok = !!data[t.key];
+        html += `<div class="item"><div>${t.label}</div><div><span class="status-ind ${ok ? 'ok' : 'bad'}">${ok ? 'Available' : 'Missing'}</span></div></div>`;
+      });
+
+      if(!(data.esp_idf_nvs_partition_gen || data.esp_idf_nvs_partition_gen_py || data.nvs_partition_gen_global)){
+        html += `<div style="margin-top:10px;color:#ffdede;font-size:0.9rem">⚠️ NVS generation not found on server. Install: <code>pip install esp-idf-nvs-partition-gen</code></div>`;
+      }
+      if(!data.esptool){
+        html += `<div style="margin-top:8px;color:#ffdede;font-size:0.9rem">ℹ️ esptool.py missing (only needed for manual CLI flashing).</div>`;
+      }
+      box.innerHTML = html;
+    } catch(e){
+      box.textContent = 'Tool check failed: ' + (e.message || e);
+      console.error(e);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=>{
+    refreshPorts();
+    checkTools();
+  });
+  document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
+
+  // Generate & Download
+  document.getElementById('btn-generate-download').addEventListener('click', async ()=>{
+    const device_id = el('device_id').value.trim();
+    const wifi_ssid = el('wifi_ssid').value.trim();
+    if(!device_id || !wifi_ssid){
+      alert('Device ID and WiFi SSID are required.');
+      return;
+    }
+
+    const form = new FormData();
+    form.append('device_id', device_id);
+    form.append('wifi_ssid', wifi_ssid);
+    form.append('wifi_password', el('wifi_password').value || '');
+    form.append('api_endpoint', el('api_endpoint').value || '');
+
+    try {
+      const resp = await fetch('/generate-single', { method:'POST', body: form });
+      if(!resp.ok){
+        const j = await resp.json().catch(()=>({error:'Unknown'}));
+        throw new Error(j.error || 'Generation failed');
+      }
+      const blob = await resp.blob();
+      const filename = `${device_id}_nvs.bin`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+      URL.revokeObjectURL(url);
+      a.remove();
+      alert('NVS binary downloaded: ' + filename);
+    } catch(e){
+      console.error(e);
+      alert('Generate failed: ' + (e.message||e));
+    }
+  });
+
+  // Generate & Flash (WebUSB)
+  document.getElementById('btn-generate-flash').addEventListener('click', async ()=>{
+    const device_id = el('device_id').value.trim();
+    const wifi_ssid = el('wifi_ssid').value.trim();
+    const nvs_offset = (el('nvs_offset').value || '0x9000').trim();
+    if(!device_id || !wifi_ssid){
+      alert('Device ID and WiFi SSID are required.');
+      return;
+    }
+
+    const form = new FormData();
+    form.append('device_id', device_id);
+    form.append('wifi_ssid', wifi_ssid);
+    form.append('wifi_password', el('wifi_password').value || '');
+    form.append('api_endpoint', el('api_endpoint').value || '');
+
+    try {
+      setSmall('nvs-web-status','Status: Generating NVS…');
+      document.getElementById('nvs-flash-wrap').style.display = 'block';
+
+      const resp = await fetch('/generate-single', { method:'POST', body: form });
+      if(!resp.ok){
+        const j = await resp.json().catch(()=>({error:'Unknown'}));
+        throw new Error(j.error || 'Generation failed');
+      }
+
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+
+      const manifest = {
+        name: "BonicBot NVS",
+        build: {
+          chipFamily: "ESP32-S3",
+          parts: [
+            { path: url, offset: nvs_offset }
+          ]
+        }
+      };
+
+      const nvsBtn = document.getElementById('nvs-web-btn');
+      nvsBtn.manifest = manifest;
+
+      const wrap = el('nvs-web-progress-wrap');
+      const bar  = el('nvs-web-progress-bar');
+      wrap.style.display = 'none';
+      bar.style.width = '0%';
+      setSmall('nvs-web-status','Status: Ready to flash (click the button)');
+
+      nvsBtn.addEventListener('state-changed', (e)=>{
+        const s = e.detail.state;
+        switch(s){
+          case 'READY':
+            setSmall('nvs-web-status','Status: Ready');
+            wrap.style.display = 'none'; bar.style.width = '0%';
+            break;
+          case 'CONNECTING':
+            setSmall('nvs-web-status','Status: Connecting…');
+            wrap.style.display = 'none';
+            break;
+          case 'CONNECTED':
+            setSmall('nvs-web-status','Status: Connected');
+            wrap.style.display = 'none';
+            break;
+          case 'PREPARING':
+            setSmall('nvs-web-status','Status: Preparing…');
+            wrap.style.display = 'block'; bar.style.width = '25%';
+            break;
+          case 'INSTALLING':
+            setSmall('nvs-web-status','Status: Installing…');
+            wrap.style.display = 'block'; bar.style.width = '75%';
+            break;
+          case 'FINISHED':
+            setSmall('nvs-web-status','Status: Complete');
+            wrap.style.display = 'block'; bar.style.width = '100%';
+            setTimeout(()=>{ wrap.style.display='none'; bar.style.width='0%'; }, 1800);
+            break;
+          case 'ERROR':
+            setSmall('nvs-web-status','Status: Failed');
+            wrap.style.display = 'none'; bar.style.width = '0%';
+            break;
+        }
+      }, { once:false });
+
+      try { nvsBtn.click(); } catch(_) {}
+    } catch(e){
+      console.error(e);
+      setSmall('nvs-web-status','Status: Error — ' + (e.message || e));
+      alert('Generate & Flash failed: ' + (e.message||e));
+    }
+  });
+
+  // Quick generate
+  document.getElementById('btn-quick-generate').addEventListener('click', async ()=>{
+    const btn = document.getElementById('btn-quick-generate');
+    btn.disabled = true;
+    try { await document.getElementById('btn-generate-download').click(); } catch(e){}
+    btn.disabled = false;
+  });
+
+  // Firmware flasher status (right pane)
+  const webBtn = document.querySelector('aside esp-web-install-button');
+  if(webBtn){
+    webBtn.addEventListener('state-changed', (e)=>{
+      const s = e.detail.state;
+      const wrap = el('fw-progress-wrap');
+      const bar = el('fw-progress-bar');
+      switch(s){
+        case 'READY':
+          setSmall('fw-status','Status: Ready'); wrap.style.display = 'none'; bar.style.width = '0%'; break;
+        case 'CONNECTING':
+          setSmall('fw-status','Status: Connecting...'); wrap.style.display = 'none'; break;
+        case 'CONNECTED':
+          setSmall('fw-status','Status: Connected'); wrap.style.display = 'none'; break;
+        case 'PREPARING':
+          setSmall('fw-status','Status: Preparing...'); wrap.style.display = 'block'; bar.style.width = '25%'; break;
+        case 'INSTALLING':
+          setSmall('fw-status','Status: Installing...'); wrap.style.display = 'block'; bar.style.width = '75%'; break;
+        case 'FINISHED':
+          setSmall('fw-status','Status: Complete'); wrap.style.display = 'block'; bar.style.width = '100%';
+          setTimeout(()=>{ wrap.style.display='none'; bar.style.width='0%'; }, 1800);
+          break;
+        case 'ERROR':
+          setSmall('fw-status','Status: Failed'); wrap.style.display = 'none'; bar.style.width = '0%'; break;
+      }
+    });
+  }
+</script>
+</body>
+</html>
