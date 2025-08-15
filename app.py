@@ -133,23 +133,15 @@ def generate_single():
     """Generate single NVS binary file and send it as attachment."""
     try:
         device_id = (request.form.get('device_id') or '').strip()
-        wifi_ssid = (request.form.get('wifi_ssid') or '').strip()
-        wifi_password = request.form.get('wifi_password') or ''
-        api_endpoint = request.form.get('api_endpoint') or ''
 
-        if not device_id or not wifi_ssid:
-            return jsonify({'error': 'Device ID and WiFi SSID are required'}), 400
+        if not device_id:
+            return jsonify({'error': 'Device ID is required'}), 400
 
         csv_content = [
             ['key', 'type', 'encoding', 'value'],
             ['bonicbot', 'namespace', '', ''],
-            ['device_id', 'data', 'string', device_id],
-            ['wifi_ssid', 'data', 'string', wifi_ssid]
+            ['device_id', 'data', 'string', device_id]
         ]
-        if wifi_password:
-            csv_content.append(['wifi_password', 'data', 'string', wifi_password])
-        if api_endpoint:
-            csv_content.append(['api_endpoint', 'data', 'string', api_endpoint])
 
         bin_path = _generate_nvs_bin(csv_content)
 

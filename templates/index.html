@@ -141,22 +141,9 @@
           <label for="device_id">Device ID *</label>
           <input id="device_id" name="device_id" type="text" placeholder="BonicBotA1002" value="BonicBotA1002" />
         </div>
-        <div class="col">
-          <label for="wifi_ssid">WiFi SSID *</label>
-          <input id="wifi_ssid" name="wifi_ssid" type="text" placeholder="Your WiFi SSID" />
-        </div>
       </div>
 
-      <div class="row">
-        <div class="col">
-          <label for="wifi_password">WiFi Password (optional)</label>
-          <input id="wifi_password" name="wifi_password" type="password" placeholder="••••••••" />
-        </div>
-        <div class="col">
-          <label for="api_endpoint">API Endpoint (optional)</label>
-          <input id="api_endpoint" name="api_endpoint" type="text" placeholder="https://api.bonicbot.com" />
-        </div>
-      </div>
+
 
       <div style="display:flex; gap:12px; margin-top:8px;">
         <div style="flex:1;">
@@ -334,17 +321,13 @@
   // Generate & Download
   document.getElementById('btn-generate-download').addEventListener('click', async ()=>{
     const device_id = el('device_id').value.trim();
-    const wifi_ssid = el('wifi_ssid').value.trim();
-    if(!device_id || !wifi_ssid){
-      alert('Device ID and WiFi SSID are required.');
+    if(!device_id){
+      alert('Device ID is required.');
       return;
     }
 
     const form = new FormData();
     form.append('device_id', device_id);
-    form.append('wifi_ssid', wifi_ssid);
-    form.append('wifi_password', el('wifi_password').value || '');
-    form.append('api_endpoint', el('api_endpoint').value || '');
 
     try {
       const resp = await fetch('/generate-single', { method:'POST', body: form });
@@ -369,18 +352,14 @@
   // Generate & Flash (WebUSB)
   document.getElementById('btn-generate-flash').addEventListener('click', async ()=>{
     const device_id = el('device_id').value.trim();
-    const wifi_ssid = el('wifi_ssid').value.trim();
     const nvs_offset = (el('nvs_offset').value || '0x9000').trim();
-    if(!device_id || !wifi_ssid){
-      alert('Device ID and WiFi SSID are required.');
+    if(!device_id){
+      alert('Device ID is required.');
       return;
     }
 
     const form = new FormData();
     form.append('device_id', device_id);
-    form.append('wifi_ssid', wifi_ssid);
-    form.append('wifi_password', el('wifi_password').value || '');
-    form.append('api_endpoint', el('api_endpoint').value || '');
 
     try {
       setSmall('nvs-web-status','Status: Generating NVS…');
