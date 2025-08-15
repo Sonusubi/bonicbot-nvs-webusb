@@ -2,3 +2,4 @@ flask
 esp-idf-nvs-partition-gen
 esptool
 pyserial
+requests

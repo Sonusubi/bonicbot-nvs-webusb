@@ -5,10 +5,61 @@ import tempfile
 import os
 from datetime import datetime
 import serial.tools.list_ports
+import requests
+
+# --- GitHub Firmware Configuration ---
+# IMPORTANT: Replace with your GitHub repository details.
+GITHUB_REPO_OWNER = "Autobonics"
+GITHUB_REPO_NAME = "bonicbot-firmware-mainPCB"
+FIRMWARE_ASSET_NAME = "mainPCB.bin"  # The name of the firmware file in your release
 
 app = Flask(__name__)
 app.secret_key = 'bonicbot_nvs_generator_2024'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+def download_latest_firmware(repo_owner, repo_name, asset_name):
+    """Downloads the latest firmware release from a GitHub repository."""
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+    save_path = os.path.join(static_dir, asset_name)
+
+    if repo_owner == "your_github_username" or repo_name == "your_github_repository":
+        print(f"⚠️  Skipping firmware download: Please update GITHUB_REPO_OWNER and GITHUB_REPO_NAME in app.py")
+        return
+
+    print(f"🚀 Checking for new firmware from {repo_owner}/{repo_name}...")
+    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
+
+    try:
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        release_data = response.json()
+        assets = release_data.get('assets', [])
+
+        asset_url = None
+        for asset in assets:
+            if asset['name'] == asset_name:
+                asset_url = asset['browser_download_url']
+                break
+
+        if not asset_url:
+            print(f"❌ Error: Firmware asset '{asset_name}' not found in the latest release.")
+            return
+
+        print(f"⬇️  Downloading '{asset_name}' from latest release: {release_data['tag_name']}")
+        firmware_response = requests.get(asset_url, timeout=60)
+        firmware_response.raise_for_status()
+
+        os.makedirs(static_dir, exist_ok=True)
+        with open(save_path, 'wb') as f:
+            f.write(firmware_response.content)
+
+        print(f"✅ Firmware downloaded successfully to {save_path}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error downloading firmware: {e}")
+    except Exception as e:
+        print(f"❌ An unexpected error occurred: {e}")
+
 
 # ---------- Routes ----------
 
@@ -172,7 +223,10 @@ def validate_tools():
     return jsonify(tools_status)
 
 if __name__ == '__main__':
+    # Attempt to download the latest firmware on startup
+    download_latest_firmware(GITHUB_REPO_OWNER, GITHUB_REPO_NAME, FIRMWARE_ASSET_NAME)
+    
     print("🤖 BonicBot NVS Generator (WebUSB flashing via ESP Web Tools)")
     print("📊 UI: http://localhost:8001")
-    print("🔧 Install: pip install esp-idf-nvs-partition-gen esptool pyserial flask")
+    print("🔧 Install: pip install -r requirements.txt")
     app.run(host='0.0.0.0', port=8001, debug=True)
