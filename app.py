@@ -3,65 +3,354 @@ import subprocess
 import csv
 import tempfile
 import os
-from datetime import datetime
+import json
+import hashlib
+from datetime import datetime, timedelta
 import serial.tools.list_ports
 import requests
+from threading import Thread, Lock
+import time
 
 # --- GitHub Firmware Configuration ---
-# IMPORTANT: Replace with your GitHub repository details.
 GITHUB_REPO_OWNER = "Autobonics"
 GITHUB_REPO_NAME = "bonicbot-firmware-mainPCB"
-FIRMWARE_ASSET_NAME = "mainPCB.bin"  # The name of the firmware file in your release
+FIRMWARE_ASSET_NAME = "mainPCB.bin"
 
 app = Flask(__name__)
 app.secret_key = 'bonicbot_nvs_generator_2024'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-def download_latest_firmware(repo_owner, repo_name, asset_name):
-    """Downloads the latest firmware release from a GitHub repository."""
-    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-    save_path = os.path.join(static_dir, asset_name)
+# Global firmware manager instance
+firmware_manager = None
+firmware_lock = Lock()
 
-    if repo_owner == "your_github_username" or repo_name == "your_github_repository":
-        print(f"⚠️  Skipping firmware download: Please update GITHUB_REPO_OWNER and GITHUB_REPO_NAME in app.py")
-        return
+class FirmwareManager:
+    def __init__(self, repo_owner, repo_name, asset_name):
+        self.repo_owner = repo_owner
+        self.repo_name = repo_name
+        self.asset_name = asset_name
+        self.static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+        self.firmware_path = os.path.join(self.static_dir, asset_name)
+        self.metadata_path = os.path.join(self.static_dir, 'firmware_metadata.json')
+        self.check_interval = 3600  # Check every hour (in seconds)
+        self.last_check_time = 0
+        self.current_version = None
+        self.is_checking = False
+        
+        # Load existing metadata
+        self._load_metadata()
+        
+        # Start background checker
+        self._start_background_checker()
+    
+    def _load_metadata(self):
+        """Load firmware metadata from local file."""
+        try:
+            if os.path.exists(self.metadata_path):
+                with open(self.metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                    self.current_version = metadata.get('version')
+                    self.last_check_time = metadata.get('last_check', 0)
+                    return metadata
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load firmware metadata: {e}")
+        return {}
+    
+    def _save_metadata(self, metadata):
+        """Save firmware metadata to local file."""
+        try:
+            os.makedirs(self.static_dir, exist_ok=True)
+            with open(self.metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+        except Exception as e:
+            print(f"⚠️  Warning: Could not save firmware metadata: {e}")
+    
+    def _get_file_hash(self, file_path):
+        """Calculate SHA256 hash of a file."""
+        try:
+            with open(file_path, 'rb') as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except:
+            return None
+    
+    def get_latest_release_info(self):
+        """Get latest release information from GitHub API."""
+        if self.repo_owner in ["your_github_username", "Autobonics"] and self.repo_name == "your_github_repository":
+            return None, "Repository configuration not set"
+        
+        api_url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/releases/latest"
+        
+        try:
+            response = requests.get(api_url, timeout=15)
+            response.raise_for_status()
+            release_data = response.json()
+            
+            # Find the firmware asset
+            asset_url = None
+            asset_size = None
+            for asset in release_data.get('assets', []):
+                if asset['name'] == self.asset_name:
+                    asset_url = asset['browser_download_url']
+                    asset_size = asset['size']
+                    break
+            
+            if not asset_url:
+                return None, f"Firmware asset '{self.asset_name}' not found in latest release"
+            
+            return {
+                'version': release_data['tag_name'],
+                'published_at': release_data['published_at'],
+                'download_url': asset_url,
+                'size': asset_size,
+                'release_notes': release_data.get('body', ''),
+                'prerelease': release_data.get('prerelease', False)
+            }, None
+            
+        except requests.exceptions.RequestException as e:
+            return None, f"Network error: {e}"
+        except Exception as e:
+            return None, f"Unexpected error: {e}"
+    
+    def needs_update(self):
+        """Check if firmware needs updating."""
+        # Skip if we've checked recently
+        current_time = time.time()
+        if current_time - self.last_check_time < self.check_interval:
+            return False, "Recently checked", None
+        
+        release_info, error = self.get_latest_release_info()
+        if error:
+            return False, error, None
+        
+        # Update last check time
+        self.last_check_time = current_time
+        
+        # If no local firmware exists, we need to download
+        if not os.path.exists(self.firmware_path):
+            return True, "No local firmware found", release_info
+        
+        # If we don't know the current version, assume we need update
+        if not self.current_version:
+            return True, "Unknown local version", release_info
+        
+        # Compare versions
+        if self.current_version != release_info['version']:
+            return True, f"New version available: {release_info['version']} (current: {self.current_version})", release_info
+        
+        return False, "Up to date", release_info
+    
+    def download_firmware(self, release_info=None):
+        """Download firmware with version tracking."""
+        with firmware_lock:
+            if self.is_checking:
+                return False, "Download already in progress"
+            
+            self.is_checking = True
+        
+        try:
+            if not release_info:
+                release_info, error = self.get_latest_release_info()
+                if error:
+                    return False, error
+            
+            print(f"🚀 Downloading firmware version {release_info['version']}...")
+            print(f"📦 Size: {release_info['size']:,} bytes")
+            
+            # Download with progress indication
+            response = requests.get(release_info['download_url'], stream=True, timeout=60)
+            response.raise_for_status()
+            
+            # Create temp file first
+            temp_path = self.firmware_path + '.tmp'
+            os.makedirs(self.static_dir, exist_ok=True)
+            
+            downloaded_size = 0
+            with open(temp_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+            
+            # Verify download size
+            if downloaded_size != release_info['size']:
+                os.unlink(temp_path)
+                return False, f"Download incomplete: {downloaded_size}/{release_info['size']} bytes"
+            
+            # Calculate hash for integrity
+            file_hash = self._get_file_hash(temp_path)
+            
+            # Move temp file to final location
+            if os.path.exists(self.firmware_path):
+                os.unlink(self.firmware_path)
+            os.rename(temp_path, self.firmware_path)
+            
+            # Update metadata
+            metadata = {
+                'version': release_info['version'],
+                'downloaded_at': datetime.now().isoformat(),
+                'last_check': time.time(),
+                'size': release_info['size'],
+                'hash': file_hash,
+                'release_notes': release_info['release_notes'],
+                'prerelease': release_info['prerelease']
+            }
+            self._save_metadata(metadata)
+            
+            self.current_version = release_info['version']
+            
+            print(f"✅ Firmware {release_info['version']} downloaded successfully")
+            print(f"💾 Saved to: {self.firmware_path}")
+            print(f"🔒 Hash: {file_hash[:16]}...")
+            
+            return True, f"Downloaded version {release_info['version']}"
+            
+        except Exception as e:
+            # Clean up temp file if it exists
+            temp_path = self.firmware_path + '.tmp'
+            if os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            return False, f"Download failed: {e}"
+        
+        finally:
+            with firmware_lock:
+                self.is_checking = False
+    
+    def _start_background_checker(self):
+        """Start background thread to periodically check for updates."""
+        def background_check():
+            while True:
+                try:
+                    time.sleep(300)  # Check every 5 minutes if interval has passed
+                    
+                    needs_update, reason, release_info = self.needs_update()
+                    if needs_update and release_info:
+                        print(f"🔄 Background update check: {reason}")
+                        success, message = self.download_firmware(release_info)
+                        if success:
+                            print(f"🎉 Background firmware update completed: {message}")
+                        else:
+                            print(f"❌ Background firmware update failed: {message}")
+                    
+                except Exception as e:
+                    print(f"⚠️  Background firmware check error: {e}")
+        
+        # Start daemon thread
+        thread = Thread(target=background_check, daemon=True)
+        thread.start()
+        print("🔄 Started background firmware checker")
+    
+    def get_status(self):
+        """Get current firmware status."""
+        status = {
+            'local_firmware_exists': os.path.exists(self.firmware_path),
+            'current_version': self.current_version,
+            'last_check': self.last_check_time,
+            'is_checking': self.is_checking,
+            'repo': f"{self.repo_owner}/{self.repo_name}",
+            'asset_name': self.asset_name
+        }
+        
+        if os.path.exists(self.firmware_path):
+            stat = os.stat(self.firmware_path)
+            status['file_size'] = stat.st_size
+            status['file_modified'] = stat.st_mtime
+        
+        # Check if update is needed
+        needs_update, reason, release_info = self.needs_update()
+        status['needs_update'] = needs_update
+        status['update_reason'] = reason
+        
+        if release_info:
+            status['latest_version'] = release_info['version']
+            status['latest_published'] = release_info['published_at']
+            status['latest_prerelease'] = release_info['prerelease']
+        
+        return status
 
-    print(f"🚀 Checking for new firmware from {repo_owner}/{repo_name}...")
-    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
+def initialize_firmware_manager():
+    """Initialize the global firmware manager."""
+    global firmware_manager
+    firmware_manager = FirmwareManager(GITHUB_REPO_OWNER, GITHUB_REPO_NAME, FIRMWARE_ASSET_NAME)
+    
+    # Perform initial firmware check/download
+    print("🔍 Performing initial firmware check...")
+    needs_update, reason, release_info = firmware_manager.needs_update()
+    
+    if needs_update:
+        print(f"📥 {reason}")
+        success, message = firmware_manager.download_firmware(release_info)
+        if not success:
+            print(f"❌ Initial firmware download failed: {message}")
+    else:
+        print(f"✅ {reason}")
 
+# ---------- New Firmware API Routes ----------
+
+@app.route('/api/firmware/status')
+def firmware_status():
+    """Get current firmware status."""
     try:
-        response = requests.get(api_url, timeout=10)
-        response.raise_for_status()
-        release_data = response.json()
-        assets = release_data.get('assets', [])
-
-        asset_url = None
-        for asset in assets:
-            if asset['name'] == asset_name:
-                asset_url = asset['browser_download_url']
-                break
-
-        if not asset_url:
-            print(f"❌ Error: Firmware asset '{asset_name}' not found in the latest release.")
-            return
-
-        print(f"⬇️  Downloading '{asset_name}' from latest release: {release_data['tag_name']}")
-        firmware_response = requests.get(asset_url, timeout=60)
-        firmware_response.raise_for_status()
-
-        os.makedirs(static_dir, exist_ok=True)
-        with open(save_path, 'wb') as f:
-            f.write(firmware_response.content)
-
-        print(f"✅ Firmware downloaded successfully to {save_path}")
-
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error downloading firmware: {e}")
+        if not firmware_manager:
+            return jsonify({'error': 'Firmware manager not initialized'}), 500
+        
+        status = firmware_manager.get_status()
+        return jsonify(status)
     except Exception as e:
-        print(f"❌ An unexpected error occurred: {e}")
+        return jsonify({'error': f'Status check failed: {str(e)}'}), 500
 
+@app.route('/api/firmware/check-update', methods=['POST'])
+def check_firmware_update():
+    """Manually trigger firmware update check."""
+    try:
+        if not firmware_manager:
+            return jsonify({'error': 'Firmware manager not initialized'}), 500
+        
+        # Force check by resetting last check time
+        firmware_manager.last_check_time = 0
+        
+        needs_update, reason, release_info = firmware_manager.needs_update()
+        
+        result = {
+            'needs_update': needs_update,
+            'reason': reason,
+            'current_version': firmware_manager.current_version
+        }
+        
+        if release_info:
+            result['latest_version'] = release_info['version']
+            result['release_notes'] = release_info['release_notes']
+            result['published_at'] = release_info['published_at']
+            result['prerelease'] = release_info['prerelease']
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': f'Update check failed: {str(e)}'}), 500
 
-# ---------- Routes ----------
+@app.route('/api/firmware/download', methods=['POST'])
+def download_firmware():
+    """Manually trigger firmware download."""
+    try:
+        if not firmware_manager:
+            return jsonify({'error': 'Firmware manager not initialized'}), 500
+        
+        if firmware_manager.is_checking:
+            return jsonify({'error': 'Download already in progress'}), 409
+        
+        success, message = firmware_manager.download_firmware()
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 500
+            
+    except Exception as e:
+        return jsonify({'error': f'Download failed: {str(e)}'}), 500
+
+# ---------- Original Routes (unchanged) ----------
 
 @app.route('/')
 def index():
@@ -69,7 +358,7 @@ def index():
 
 @app.route('/api/list-ports')
 def list_ports():
-    """List available serial ports with ESP32 device filtering (for manual CLI info only)."""
+    """List available serial ports with ESP32 device filtering."""
     try:
         ports = []
         available_ports = serial.tools.list_ports.comports()
@@ -204,7 +493,7 @@ def generate_single():
 
 @app.route('/api/validate-tools')
 def validate_tools():
-    """Check if required tools are available on the server (for NVS generation; esptool is optional)."""
+    """Check if required tools are available on the server."""
     tools_status = {}
     methods = [
         ('esp_idf_nvs_partition_gen', ['python3', '-m', 'esp_idf_nvs_partition_gen.nvs_partition_gen', '--help']),
@@ -223,10 +512,15 @@ def validate_tools():
     return jsonify(tools_status)
 
 if __name__ == '__main__':
-    # Attempt to download the latest firmware on startup
-    download_latest_firmware(GITHUB_REPO_OWNER, GITHUB_REPO_NAME, FIRMWARE_ASSET_NAME)
+    # Initialize firmware manager
+    initialize_firmware_manager()
     
-    print("🤖 BonicBot NVS Generator (WebUSB flashing via ESP Web Tools)")
+    print("🤖 BonicBot NVS Generator (Enhanced Firmware Management)")
     print("📊 UI: http://localhost:8001")
     print("🔧 Install: pip install -r requirements.txt")
+    print("📡 Firmware API endpoints:")
+    print("   GET  /api/firmware/status - Get firmware status")
+    print("   POST /api/firmware/check-update - Check for updates")
+    print("   POST /api/firmware/download - Download latest firmware")
+    
     app.run(host='0.0.0.0', port=8001, debug=True)
