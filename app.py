@@ -12,24 +12,35 @@ from threading import Thread, Lock
 import time
 
 # --- GitHub Firmware Configuration ---
-GITHUB_REPO_OWNER = "Autobonics"
-GITHUB_REPO_NAME = "bonicbot-firmware-mainPCB"
+FIRMWARE_REPOS = {
+    "BonicBotS1": {
+        "owner": "Autobonics",
+        "repo": "bonicbot-firmware-mainPCB",
+        "asset_name": "mainPCB.bin"
+    },
+    "BonicBotA1": {
+        "owner": "Autobonics",
+        "repo": "bonicbota1-firmware-pcb",
+        "asset_name": "mainPCB.bin"
+    }
+}
 FIRMWARE_ASSET_NAME = "mainPCB.bin"
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static', static_folder='static')
 app.secret_key = 'bonicbot_nvs_generator_2024'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Global firmware manager instance
-firmware_manager = None
+# Global firmware manager instances
+firmware_managers = {}
 firmware_lock = Lock()
 
 class FirmwareManager:
-    def __init__(self, repo_owner, repo_name, asset_name):
+    def __init__(self, bot_name, repo_owner, repo_name, asset_name):
+        self.bot_name = bot_name
         self.repo_owner = repo_owner
         self.repo_name = repo_name
         self.asset_name = asset_name
-        self.static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+        self.static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', bot_name)
         self.firmware_path = os.path.join(self.static_dir, asset_name)
         self.metadata_path = os.path.join(self.static_dir, 'firmware_metadata.json')
         self.check_interval = 3600  # Check every hour (in seconds)
@@ -53,7 +64,7 @@ class FirmwareManager:
                     self.last_check_time = metadata.get('last_check', 0)
                     return metadata
         except Exception as e:
-            print(f"⚠️  Warning: Could not load firmware metadata: {e}")
+            print(f"⚠️  Warning: Could not load firmware metadata for {self.bot_name}: {e}")
         return {}
     
     def _save_metadata(self, metadata):
@@ -63,7 +74,7 @@ class FirmwareManager:
             with open(self.metadata_path, 'w') as f:
                 json.dump(metadata, f, indent=2)
         except Exception as e:
-            print(f"⚠️  Warning: Could not save firmware metadata: {e}")
+            print(f"⚠️  Warning: Could not save firmware metadata for {self.bot_name}: {e}")
     
     def _get_file_hash(self, file_path):
         """Calculate SHA256 hash of a file."""
@@ -75,7 +86,7 @@ class FirmwareManager:
     
     def get_latest_release_info(self):
         """Get latest release information from GitHub API."""
-        if self.repo_owner in ["your_github_username", "Autobonics"] and self.repo_name == "your_github_repository":
+        if self.repo_owner in ["your_github_username"] and self.repo_name == "your_github_repository":
             return None, "Repository configuration not set"
         
         api_url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/releases/latest"
@@ -153,7 +164,7 @@ class FirmwareManager:
                 if error:
                     return False, error
             
-            print(f"🚀 Downloading firmware version {release_info['version']}...")
+            print(f"🚀 Downloading firmware version {release_info['version']} for {self.bot_name}...")
             print(f"📦 Size: {release_info['size']:,} bytes")
             
             # Download with progress indication
@@ -198,7 +209,7 @@ class FirmwareManager:
             
             self.current_version = release_info['version']
             
-            print(f"✅ Firmware {release_info['version']} downloaded successfully")
+            print(f"✅ Firmware {release_info['version']} for {self.bot_name} downloaded successfully")
             print(f"💾 Saved to: {self.firmware_path}")
             print(f"🔒 Hash: {file_hash[:16]}...")
             
@@ -227,20 +238,20 @@ class FirmwareManager:
                     
                     needs_update, reason, release_info = self.needs_update()
                     if needs_update and release_info:
-                        print(f"🔄 Background update check: {reason}")
+                        print(f"🔄 Background update check for {self.bot_name}: {reason}")
                         success, message = self.download_firmware(release_info)
                         if success:
-                            print(f"🎉 Background firmware update completed: {message}")
+                            print(f"🎉 Background firmware update for {self.bot_name} completed: {message}")
                         else:
-                            print(f"❌ Background firmware update failed: {message}")
+                            print(f"❌ Background firmware update for {self.bot_name} failed: {message}")
                     
                 except Exception as e:
-                    print(f"⚠️  Background firmware check error: {e}")
+                    print(f"⚠️  Background firmware check error for {self.bot_name}: {e}")
         
         # Start daemon thread
         thread = Thread(target=background_check, daemon=True)
         thread.start()
-        print("🔄 Started background firmware checker")
+        print(f"🔄 Started background firmware checker for {self.bot_name}")
     
     def get_status(self):
         """Get current firmware status."""
@@ -270,53 +281,60 @@ class FirmwareManager:
         
         return status
 
-def initialize_firmware_manager():
-    """Initialize the global firmware manager."""
-    global firmware_manager
-    firmware_manager = FirmwareManager(GITHUB_REPO_OWNER, GITHUB_REPO_NAME, FIRMWARE_ASSET_NAME)
-    
-    # Perform initial firmware check/download
-    print("🔍 Performing initial firmware check...")
-    needs_update, reason, release_info = firmware_manager.needs_update()
-    
-    if needs_update:
-        print(f"📥 {reason}")
-        success, message = firmware_manager.download_firmware(release_info)
-        if not success:
-            print(f"❌ Initial firmware download failed: {message}")
-    else:
-        print(f"✅ {reason}")
+def initialize_firmware_managers():
+    """Initialize the global firmware managers."""
+    global firmware_managers
+    for bot_name, config in FIRMWARE_REPOS.items():
+        firmware_managers[bot_name] = FirmwareManager(
+            bot_name,
+            config["owner"],
+            config["repo"],
+            config["asset_name"]
+        )
+        
+        # Perform initial firmware check/download
+        print(f"🔍 Performing initial firmware check for {bot_name}...")
+        needs_update, reason, release_info = firmware_managers[bot_name].needs_update()
+        
+        if needs_update:
+            print(f"📥 {reason}")
+            success, message = firmware_managers[bot_name].download_firmware(release_info)
+            if not success:
+                print(f"❌ Initial firmware download for {bot_name} failed: {message}")
+        else:
+            print(f"✅ {reason}")
 
 # ---------- New Firmware API Routes ----------
 
-@app.route('/api/firmware/status')
-def firmware_status():
+@app.route('/api/firmware/<bot_name>/status')
+def firmware_status(bot_name):
     """Get current firmware status."""
     try:
-        if not firmware_manager:
-            return jsonify({'error': 'Firmware manager not initialized'}), 500
+        if bot_name not in firmware_managers:
+            return jsonify({'error': f'Invalid bot name: {bot_name}'}), 404
         
-        status = firmware_manager.get_status()
+        status = firmware_managers[bot_name].get_status()
         return jsonify(status)
     except Exception as e:
         return jsonify({'error': f'Status check failed: {str(e)}'}), 500
 
-@app.route('/api/firmware/check-update', methods=['POST'])
-def check_firmware_update():
+@app.route('/api/firmware/<bot_name>/check-update', methods=['POST'])
+def check_firmware_update(bot_name):
     """Manually trigger firmware update check."""
     try:
-        if not firmware_manager:
-            return jsonify({'error': 'Firmware manager not initialized'}), 500
+        if bot_name not in firmware_managers:
+            return jsonify({'error': f'Invalid bot name: {bot_name}'}), 404
         
+        manager = firmware_managers[bot_name]
         # Force check by resetting last check time
-        firmware_manager.last_check_time = 0
+        manager.last_check_time = 0
         
-        needs_update, reason, release_info = firmware_manager.needs_update()
+        needs_update, reason, release_info = manager.needs_update()
         
         result = {
             'needs_update': needs_update,
             'reason': reason,
-            'current_version': firmware_manager.current_version
+            'current_version': manager.current_version
         }
         
         if release_info:
@@ -330,17 +348,18 @@ def check_firmware_update():
     except Exception as e:
         return jsonify({'error': f'Update check failed: {str(e)}'}), 500
 
-@app.route('/api/firmware/download', methods=['POST'])
-def download_firmware():
+@app.route('/api/firmware/<bot_name>/download', methods=['POST'])
+def download_firmware(bot_name):
     """Manually trigger firmware download."""
     try:
-        if not firmware_manager:
-            return jsonify({'error': 'Firmware manager not initialized'}), 500
-        
-        if firmware_manager.is_checking:
+        if bot_name not in firmware_managers:
+            return jsonify({'error': f'Invalid bot name: {bot_name}'}), 404
+            
+        manager = firmware_managers[bot_name]
+        if manager.is_checking:
             return jsonify({'error': 'Download already in progress'}), 409
         
-        success, message = firmware_manager.download_firmware()
+        success, message = manager.download_firmware()
         
         if success:
             return jsonify({'success': True, 'message': message})
@@ -354,7 +373,7 @@ def download_firmware():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', bots=FIRMWARE_REPOS.keys())
 
 @app.route('/api/list-ports')
 def list_ports():
@@ -512,15 +531,17 @@ def validate_tools():
     return jsonify(tools_status)
 
 if __name__ == '__main__':
-    # Initialize firmware manager
-    initialize_firmware_manager()
+    # Initialize firmware managers
+    initialize_firmware_managers()
     
     print("🤖 BonicBot NVS Generator (Enhanced Firmware Management)")
     print("📊 UI: http://localhost:8001")
     print("🔧 Install: pip install -r requirements.txt")
     print("📡 Firmware API endpoints:")
-    print("   GET  /api/firmware/status - Get firmware status")
-    print("   POST /api/firmware/check-update - Check for updates")
-    print("   POST /api/firmware/download - Download latest firmware")
+    for bot_name in FIRMWARE_REPOS.keys():
+        print(f"   /{bot_name}:")
+        print(f"     GET  /api/firmware/{bot_name}/status - Get firmware status")
+        print(f"     POST /api/firmware/{bot_name}/check-update - Check for updates")
+        print(f"     POST /api/firmware/{bot_name}/download - Download latest firmware")
     
     app.run(host='0.0.0.0', port=8001, debug=True)

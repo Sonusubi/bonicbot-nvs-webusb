@@ -1,0 +1,15 @@
+
+{
+  "name": "BonicBotS1 Firmware",
+  "version": "v1.0.3",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "/static/mainPCB.ino.bootloader.bin", "offset": 0 },
+        { "path": "/static/mainPCB.ino.partitions.bin", "offset": 32768 },
+        { "path": "/static/BonicBotS1/mainPCB.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

@@ -23,7 +23,9 @@
       --info:#42a5f5;
       --glass: rgba(255,255,255,0.03);
     }
-    *{box-sizing:border-box}
+    *{
+      box-sizing:border-box
+    }
     body{
       margin:0;
       min-height:100vh;
@@ -273,6 +275,13 @@
     <aside class="card">
       <h3>🚀 Smart Firmware Management</h3>
       
+      <label for="bot-select">Select BonicBot Model</label>
+      <select id="bot-select">
+        {% for bot in bots %}
+        <option value="{{ bot }}">{{ bot }}</option>
+        {% endfor %}
+      </select>
+
       <!-- Firmware Status Section -->
       <div class="firmware-status">
         <div>
@@ -303,9 +312,9 @@
       <h3>🔁 Firmware Flasher</h3>
       <div class="small" style="margin-bottom:12px;">Use esp-web-tools to install firmware via browser. Make sure device is connected.</div>
 
-      <esp-web-install-button manifest="/static/manifest.json">
+      <esp-web-install-button id="firmware-flasher-btn">
         <button slot="activate" class="btn primary" style="width:100%; justify-content:center;">
-          <i class="fas fa-upload" style="margin-right:8px"></i>Install Firmware (manifest.json)
+          <i class="fas fa-upload" style="margin-right:8px"></i>Install Firmware
         </button>
       </esp-web-install-button>
 
@@ -327,6 +336,8 @@
 <script>
   const el = (id)=> document.getElementById(id);
   const setSmall = (id, txt)=> { const e = el(id); if(e) e.textContent = txt; };
+
+  let selectedBot = '{{ bots[0] }}';
 
   // Firmware management state
   let firmwareStatus = {
@@ -355,12 +366,12 @@
     
     try {
       // Get current status first
-      const statusRes = await fetch('/api/firmware/status');
+      const statusRes = await fetch(`/api/firmware/${selectedBot}/status`);
       if (!statusRes.ok) throw new Error('Status check failed');
       const status = await statusRes.json();
       
       // Check for updates
-      const updateRes = await fetch('/api/firmware/check-update', { method: 'POST' });
+      const updateRes = await fetch(`/api/firmware/${selectedBot}/check-update`, { method: 'POST' });
       if (!updateRes.ok) throw new Error('Update check failed');
       const updateData = await updateRes.json();
       
@@ -421,7 +432,7 @@
     statusText.innerHTML = `⬇️ <span style="color:var(--info)">Downloading firmware...</span>`;
     
     try {
-      const response = await fetch('/api/firmware/download', { method: 'POST' });
+      const response = await fetch(`/api/firmware/${selectedBot}/download`, { method: 'POST' });
       const result = await response.json();
       
       if (response.ok && result.success) {
@@ -440,7 +451,17 @@
     }
   }
 
+  function updateFlasherManifest() {
+    const flasherBtn = el('firmware-flasher-btn');
+    flasherBtn.manifest = `/static/${selectedBot}/manifest.json?t=${new Date().getTime()}`;
+  }
+
   // Event listeners for firmware management
+  el('bot-select').addEventListener('change', (e) => {
+    selectedBot = e.target.value;
+    refreshFirmwareStatus();
+    updateFlasherManifest();
+  });
   el('btn-refresh-firmware').addEventListener('click', refreshFirmwareStatus);
   el('btn-update-firmware').addEventListener('click', updateFirmware);
   el('btn-force-download').addEventListener('click', updateFirmware);
@@ -529,9 +550,11 @@
   }
 
   document.addEventListener('DOMContentLoaded', ()=>{
+    selectedBot = el('bot-select').value;
     refreshPorts();
     checkTools();
     refreshFirmwareStatus(); // Initial firmware status check
+    updateFlasherManifest();
   });
   document.getElementById('btn-refresh-ports').addEventListener('click', refreshPorts);
 
@@ -677,7 +700,7 @@
   });
 
   // Firmware flasher status (right pane)
-  const webBtn = document.querySelector('aside esp-web-install-button');
+  const webBtn = document.getElementById('firmware-flasher-btn');
   if(webBtn){
     webBtn.addEventListener('state-changed', (e)=>{
       const s = e.detail.state;
