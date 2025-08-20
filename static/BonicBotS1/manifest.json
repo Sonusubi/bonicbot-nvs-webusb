@@ -2,6 +2,7 @@
 {
   "name": "BonicBotS1 Firmware",
   "version": "v1.0.3",
+  "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
