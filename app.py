@@ -378,7 +378,7 @@ def download_firmware(bot_name):
 
 @app.route('/')
 def index():
-    return render_template('index.html', bots=FIRMWARE_REPOS.keys())
+    return render_template('index.html', bots=list(FIRMWARE_REPOS.keys()))
 
 @app.route('/api/list-ports')
 def list_ports():
