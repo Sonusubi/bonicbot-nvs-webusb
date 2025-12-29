@@ -1,9 +1,9 @@
 {
-  "version": "v1.0.0",
-  "downloaded_at": "2025-08-20T14:13:28.905933",
-  "last_check": 1755695608.9059463,
-  "size": 1079760,
-  "hash": "866760d000ca1a35252e622dc74ccf10929196215fa54a6812e513ce3a567111",
-  "release_notes": "Initial firmware release",
+  "version": "v1.0.1",
+  "downloaded_at": "2025-11-18T13:47:50.213009",
+  "last_check": 1763473670.213028,
+  "size": 1065296,
+  "hash": "100319574e59ecca890409a1e196492222ce109f5a037a83428cac549a902462",
+  "release_notes": "* Improved touch accuracy with new calibration feature\r\n* Smoother performance with reduced motor noise\r\n\r\n",
   "prerelease": false
 }
