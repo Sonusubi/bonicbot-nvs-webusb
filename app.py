@@ -56,8 +56,8 @@ class FirmwareManager:
         # Load existing metadata
         self._load_metadata()
         
-        # Start background checker
-        self._start_background_checker()
+        # Background checker removed as per user request
+
     
     def _load_metadata(self):
         """Load firmware metadata from local file."""
@@ -234,29 +234,8 @@ class FirmwareManager:
             with firmware_lock:
                 self.is_checking = False
     
-    def _start_background_checker(self):
-        """Start background thread to periodically check for updates."""
-        def background_check():
-            while True:
-                try:
-                    time.sleep(300)  # Check every 5 minutes if interval has passed
-                    
-                    needs_update, reason, release_info = self.needs_update()
-                    if needs_update and release_info:
-                        print(f"🔄 Background update check for {self.bot_name}: {reason}")
-                        success, message = self.download_firmware(release_info)
-                        if success:
-                            print(f"🎉 Background firmware update for {self.bot_name} completed: {message}")
-                        else:
-                            print(f"❌ Background firmware update for {self.bot_name} failed: {message}")
-                    
-                except Exception as e:
-                    print(f"⚠️  Background firmware check error for {self.bot_name}: {e}")
-        
-        # Start daemon thread
-        thread = Thread(target=background_check, daemon=True)
-        thread.start()
-        print(f"🔄 Started background firmware checker for {self.bot_name}")
+    # Background checker method removed
+
     
     def get_status(self):
         """Get current firmware status."""
@@ -274,16 +253,6 @@ class FirmwareManager:
             status['file_size'] = stat.st_size
             status['file_modified'] = stat.st_mtime
         
-        # Check if update is needed
-        needs_update, reason, release_info = self.needs_update()
-        status['needs_update'] = needs_update
-        status['update_reason'] = reason
-        
-        if release_info:
-            status['latest_version'] = release_info['version']
-            status['latest_published'] = release_info['published_at']
-            status['latest_prerelease'] = release_info['prerelease']
-        
         return status
 
 def initialize_firmware_managers():
@@ -297,17 +266,8 @@ def initialize_firmware_managers():
             config["asset_name"]
         )
         
-        # Perform initial firmware check/download
-        print(f"🔍 Performing initial firmware check for {bot_name}...")
-        needs_update, reason, release_info = firmware_managers[bot_name].needs_update()
-        
-        if needs_update:
-            print(f"📥 {reason}")
-            success, message = firmware_managers[bot_name].download_firmware(release_info)
-            if not success:
-                print(f"❌ Initial firmware download for {bot_name} failed: {message}")
-        else:
-            print(f"✅ {reason}")
+        # Perform initial firmware check (Local only)
+        print(f"🔍 Initialized firmware manager for {bot_name} (Current: {firmware_managers[bot_name].current_version})")
 
 # ---------- New Firmware API Routes ----------
 

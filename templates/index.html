@@ -528,7 +528,7 @@
     });
 
     // --- Firmware State ---
-    async function refreshFirmwareStatus() {
+    async function refreshFirmwareStatus(checkOnline = false) {
       const btn = el('btn-refresh-firmware');
       const statusText = el('firmware-status-text');
       const currentBadge = el('current-version-badge');
@@ -537,19 +537,32 @@
       const notesDiv = el('release-notes');
 
       btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      if (checkOnline) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+      } else {
+        btn.innerHTML = '<i class="fas fa-sync"></i> Check';
+      }
 
       try {
+        // Always load local status
         const statusRes = await fetch(`/api/firmware/${selectedBot}/status`);
         const status = await statusRes.json();
 
-        const updateRes = await fetch(`/api/firmware/${selectedBot}/check-update`, { method: 'POST' });
-        const updateData = await updateRes.json();
+        let updateData = { needs_update: false };
+
+        // Only check online if requested
+        if (checkOnline) {
+          statusText.textContent = "Contacting GitHub...";
+          const updateRes = await fetch(`/api/firmware/${selectedBot}/check-update`, { method: 'POST' });
+          updateData = await updateRes.json();
+        }
 
         currentBadge.textContent = status.current_version || 'Unknown';
 
         if (updateData.latest_version) {
           latestBadge.textContent = updateData.latest_version;
+        } else if (!checkOnline) {
+          latestBadge.textContent = '---';
         }
 
         if (updateData.needs_update) {
@@ -557,7 +570,11 @@
           updateBtn.style.display = 'inline-block';
           updateBtn.innerHTML = `<i class="fas fa-download"></i> Get ${updateData.latest_version}`;
         } else {
-          statusText.innerHTML = `<span style="color:var(--success)">Up to date</span>`;
+          if (checkOnline) {
+            statusText.innerHTML = `<span style="color:var(--success)">Up to date</span>`;
+          } else {
+            statusText.innerHTML = `<span style="color:var(--text-muted)">Ready (Local Only)</span>`;
+          }
           updateBtn.style.display = 'none';
         }
 
@@ -565,13 +582,13 @@
           const changelog = el('changelog-content');
           changelog.innerHTML = updateData.release_notes.replace(/\n/g, '<br>');
           notesDiv.style.display = 'block';
-        } else {
+        } else if (checkOnline) {
           notesDiv.style.display = 'none';
         }
 
       } catch (error) {
         console.error(error);
-        statusText.textContent = 'Connection failed';
+        statusText.textContent = 'Status check failed';
       } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-sync"></i> Check';
@@ -620,10 +637,10 @@
     // --- Event Listeners ---
     el('bot-select').addEventListener('change', (e) => {
       selectedBot = e.target.value;
-      refreshFirmwareStatus();
+      refreshFirmwareStatus(); // Local only
       updateFlasherManifest();
     });
-    el('btn-refresh-firmware').addEventListener('click', refreshFirmwareStatus);
+    el('btn-refresh-firmware').addEventListener('click', () => refreshFirmwareStatus(true));
     el('btn-update-firmware').addEventListener('click', updateFirmware);
 
     // --- NVS Logic ---
