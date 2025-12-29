@@ -462,7 +462,7 @@
 
     <footer class="footer">
       BonicBot System • WebUSB Enabled <br>
-      <span style="opacity:0.5; font-size:0.75rem;">Powered by ESP Web Tools & Flask</span>
+      <span style="opacity:0.5; font-size:0.75rem;">Powered by Autobonics</span>
     </footer>
 
   </div>
@@ -734,7 +734,14 @@
     };
 
     el('btn-generate-download').addEventListener('click', () => handleNvsFlash(false));
-    el('btn-generate-flash').addEventListener('click', () => handleNvsFlash(true));
+
+    el('btn-generate-flash').addEventListener('click', () => {
+      if (!navigator.usb) {
+        alert('Your browser or device does not support WebUSB (required for flashing).\n\n- Android: Use Chrome w/ OTG cable\n- iPad/iPhone: Not supported\n- Desktop: Use Chrome, Edge, or Opera');
+        return;
+      }
+      handleNvsFlash(true);
+    });
 
     // --- Firmware Flasher UI state ---
     const fwBtn = el('firmware-flasher-btn');
