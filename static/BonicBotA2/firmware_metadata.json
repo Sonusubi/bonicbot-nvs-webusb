@@ -1,9 +1,9 @@
 {
-  "version": "v1.0.6",
+  "version": "v1.0.7",
   "downloaded_at": "2026-04-08T07:44:24.008028",
   "last_check": 1775630664.008048,
-  "size": 1116400,
-  "hash": "b1ae3010095bb98bad46127044edd3188eab39e30783dad61ee4a76a0144b7ea",
+  "size": 1117872,
+  "hash": "1d84125e70c967eb22f8665e7b33c498b6cd4ab81d75b36fef96d042980e3412",
   "release_notes": "Offline swapped (no cached notes)",
   "prerelease": false
 }

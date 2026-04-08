@@ -1042,6 +1042,10 @@
     const CTRL_CHAR_UUID    = "00010001-0000-1000-8000-00805f9b34fb";
     const FB_SERVICE_UUID   = "00020000-0000-1000-8000-00805f9b34fb";
     const FB_CHAR_UUID      = "00020004-0000-1000-8000-00805f9b34fb";
+    
+    // OTA Version Service
+    const OTA_SERVICE_UUID  = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const OTA_VERSION_UUID  = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
 
     let nvsBleDevice = null;
     let nvsCtrlChar = null;
@@ -1057,7 +1061,7 @@
             
             nvsBleDevice = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
-                optionalServices: [CTRL_SERVICE_UUID, FB_SERVICE_UUID]
+                optionalServices: [CTRL_SERVICE_UUID, FB_SERVICE_UUID, OTA_SERVICE_UUID]
             });
 
             nvsBleDevice.addEventListener('gattserverdisconnected', () => {
@@ -1082,8 +1086,19 @@
             await nvsFbChar.startNotifications();
             nvsFbChar.addEventListener('characteristicvaluechanged', handleFbNotification);
 
+            window.activeBotFwVersion = "Unknown";
+            try {
+                statusEl.textContent = "Checking Firmware Version...";
+                const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
+                const versionChar = await otaService.getCharacteristic(OTA_VERSION_UUID);
+                const val = await versionChar.readValue();
+                window.activeBotFwVersion = new TextDecoder('utf-8').decode(val);
+            } catch(versionErr) {
+                console.warn("Could not read FW version. Ensure device exposes it.", versionErr);
+            }
+
             statusEl.className = "status-badge success";
-            statusEl.textContent = "Connected! Reading current config...";
+            statusEl.textContent = `Connected (FW: ${window.activeBotFwVersion})`;
             
             writeBtn.disabled = false;
 
@@ -1129,7 +1144,7 @@
                 
                 const statusEl = el('ble-nvs-status');
                 statusEl.className = "status-badge success";
-                statusEl.innerHTML = `Loaded config from <b>${dev_id}</b>`;
+                statusEl.innerHTML = `Loaded config from <b>${dev_id}</b> (FW: ${window.activeBotFwVersion})`;
             }
         }
     }
