@@ -127,6 +127,40 @@ class FirmwareManager:
         except Exception as e:
             return None, f"Unexpected error: {e}"
     
+    def get_all_releases_info(self):
+        """Get all releases information from GitHub API."""
+        if self.repo_owner in ["your_github_username"] and self.repo_name == "your_github_repository":
+            return None, "Repository config not set"
+        
+        api_url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/releases"
+        try:
+            response = requests.get(api_url, timeout=15)
+            response.raise_for_status()
+            releases_data = response.json()
+            
+            releases = []
+            for release in releases_data:
+                tag_name = release.get('tag_name')
+                asset_url = None
+                asset_size = None
+                for asset in release.get('assets', []):
+                    if asset['name'] == self.asset_name:
+                        asset_url = asset['browser_download_url']
+                        asset_size = asset['size']
+                        break
+                if asset_url:
+                    releases.append({
+                        'version': tag_name,
+                        'published_at': release.get('published_at'),
+                        'download_url': asset_url,
+                        'size': asset_size,
+                        'release_notes': release.get('body', ''),
+                        'prerelease': release.get('prerelease', False)
+                    })
+            return releases, None
+        except Exception as e:
+            return None, f"Error: {e}"
+
     def needs_update(self):
         """Check if firmware needs updating."""
         # Skip if we've checked recently
@@ -160,76 +194,69 @@ class FirmwareManager:
         with firmware_lock:
             if self.is_checking:
                 return False, "Download already in progress"
-            
             self.is_checking = True
         
         try:
+            versions_dir = os.path.join(self.static_dir, 'versions')
+            os.makedirs(versions_dir, exist_ok=True)
             if not release_info:
-                release_info, error = self.get_latest_release_info()
-                if error:
-                    return False, error
+                return False, "Cannot proceed without target version"
+                
+            v_name = release_info['version']
+            target_bin = os.path.join(versions_dir, f"{v_name}.bin")
             
-            print(f"🚀 Downloading firmware version {release_info['version']} for {self.bot_name}...")
-            print(f"📦 Size: {release_info['size']:,} bytes")
-            
-            # Download with progress indication
-            response = requests.get(release_info['download_url'], stream=True, timeout=60)
-            response.raise_for_status()
-            
-            # Create temp file first
-            temp_path = self.firmware_path + '.tmp'
-            os.makedirs(self.static_dir, exist_ok=True)
-            
-            downloaded_size = 0
-            with open(temp_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded_size += len(chunk)
-            
-            # Verify download size
-            if downloaded_size != release_info['size']:
-                os.unlink(temp_path)
-                return False, f"Download incomplete: {downloaded_size}/{release_info['size']} bytes"
-            
-            # Calculate hash for integrity
-            file_hash = self._get_file_hash(temp_path)
-            
-            # Move temp file to final location
-            if os.path.exists(self.firmware_path):
-                os.unlink(self.firmware_path)
-            os.rename(temp_path, self.firmware_path)
-            
-            # Update metadata
-            metadata = {
-                'version': release_info['version'],
-                'downloaded_at': datetime.now().isoformat(),
-                'last_check': time.time(),
-                'size': release_info['size'],
-                'hash': file_hash,
-                'release_notes': release_info['release_notes'],
-                'prerelease': release_info['prerelease']
-            }
-            self._save_metadata(metadata)
-            
-            self.current_version = release_info['version']
-            
-            print(f"✅ Firmware {release_info['version']} for {self.bot_name} downloaded successfully")
-            print(f"💾 Saved to: {self.firmware_path}")
-            print(f"🔒 Hash: {file_hash[:16]}...")
-            
-            return True, f"Downloaded version {release_info['version']}"
-            
-        except Exception as e:
-            # Clean up temp file if it exists
-            temp_path = self.firmware_path + '.tmp'
-            if os.path.exists(temp_path):
+            # Download the specific release if we don't have it fully cached offline
+            if not (os.path.exists(target_bin) and os.path.getsize(target_bin) == release_info.get('size', -1)):
+                print(f"🚀 Downloading firmware version {v_name} into cache...")
                 try:
-                    os.unlink(temp_path)
-                except:
-                    pass
+                    response = requests.get(release_info['download_url'], stream=True, timeout=60)
+                    response.raise_for_status()
+                    
+                    downloaded_size = 0
+                    with open(target_bin + '.tmp', 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded_size += len(chunk)
+                                
+                    if downloaded_size == release_info.get('size', downloaded_size):
+                        os.rename(target_bin + '.tmp', target_bin)
+                    else:
+                        os.unlink(target_bin + '.tmp')
+                        return False, f"Incomplete download for {v_name}"
+                        
+                except Exception as e:
+                    return False, f"Failed to download {v_name}: {e}"
+            else:
+                print(f"⚡ Using offline cached version {v_name} for activation...")
+            
+            if os.path.exists(target_bin):
+                import shutil
+                shutil.copy2(target_bin, self.firmware_path)
+                
+                # Calculate hash for integrity
+                file_hash = self._get_file_hash(self.firmware_path)
+                
+                # Update metadata
+                metadata = {
+                    'version': release_info['version'],
+                    'downloaded_at': datetime.now().isoformat(),
+                    'last_check': time.time(),
+                    'size': release_info.get('size', os.path.getsize(self.firmware_path)),
+                    'hash': file_hash,
+                    'release_notes': release_info.get('release_notes', ''),
+                    'prerelease': release_info.get('prerelease', False)
+                }
+                self._save_metadata(metadata)
+                self.current_version = release_info['version']
+                
+                msg = f"Activated latest firmware version {release_info['version']}."
+                return True, msg
+            else:
+                return False, f"Target binary {release_info['version']} could not be found."
+                
+        except Exception as e:
             return False, f"Download failed: {e}"
-        
         finally:
             with firmware_lock:
                 self.is_checking = False
@@ -252,6 +279,15 @@ class FirmwareManager:
             stat = os.stat(self.firmware_path)
             status['file_size'] = stat.st_size
             status['file_modified'] = stat.st_mtime
+            
+        # Append locally downloaded versions for offline swapping
+        versions_dir = os.path.join(self.static_dir, 'versions')
+        offline_versions = []
+        if os.path.exists(versions_dir):
+            for f in os.listdir(versions_dir):
+                if f.endswith('.bin'):
+                    offline_versions.append(f.replace('.bin', ''))
+        status['offline_versions'] = sorted(offline_versions, reverse=True)
         
         return status
 
@@ -296,10 +332,14 @@ def check_firmware_update(bot_name):
         
         needs_update, reason, release_info = manager.needs_update()
         
+        # Fetch all available releases to show dropdown
+        all_releases, error = manager.get_all_releases_info()
+        
         result = {
             'needs_update': needs_update,
             'reason': reason,
-            'current_version': manager.current_version
+            'current_version': manager.current_version,
+            'available_versions': all_releases if all_releases else []
         }
         
         if release_info:
@@ -324,7 +364,38 @@ def download_firmware(bot_name):
         if manager.is_checking:
             return jsonify({'error': 'Download already in progress'}), 409
         
-        success, message = manager.download_firmware()
+        # Check if caller wants a specific version
+        data = request.json or {}
+        target_version = data.get('version')
+        
+        # If offline swap available, do it INSTANTLY without touching GitHub to prevent rate limits
+        versions_dir = os.path.join(manager.static_dir, 'versions')
+        offline_target_path = os.path.join(versions_dir, f"{target_version}.bin") if target_version else None
+        
+        if offline_target_path and os.path.exists(offline_target_path):
+            import shutil
+            shutil.copy2(offline_target_path, manager.firmware_path)
+            
+            # Update metadata
+            m = manager._load_metadata()
+            m['version'] = target_version
+            manager._save_metadata(m)
+            manager.current_version = target_version
+            
+            return jsonify({'success': True, 'message': f'Swapped instantly to local cached version: {target_version}'})
+            
+        release_info = None
+        if target_version:
+            all_releases, _ = manager.get_all_releases_info()
+            if all_releases:
+                for r in all_releases:
+                    if r['version'] == target_version:
+                        release_info = r
+                        break
+            if not release_info:
+                return jsonify({'error': f'Version {target_version} not found in releases or offline cache'}), 404
+        
+        success, message = manager.download_firmware(release_info)
         
         if success:
             return jsonify({'success': True, 'message': message})

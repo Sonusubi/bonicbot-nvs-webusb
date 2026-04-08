@@ -402,6 +402,50 @@
           <div class="progress-fill" id="nvs-web-progress-bar"></div>
         </div>
       </div>
+
+      <!-- Live NVS Control (BLE) Area -->
+      <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border);">
+        <h2><i class="fab fa-bluetooth-b"></i> Live NVS Control (BLE)</h2>
+        <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:16px;">
+          Read from or write NVS configuration directly to the connected robot over Bluetooth.
+        </p>
+
+        <div style="display:flex; gap:12px; margin-bottom:16px;">
+          <button id="btn-ble-nvs-connect" class="btn secondary" style="flex:1;">
+            <i class="fas fa-link"></i> Connect & Read
+          </button>
+          <button id="btn-ble-nvs-write" class="btn primary" style="flex:1;" disabled>
+            <i class="fas fa-save"></i> Save to Device
+          </button>
+        </div>
+
+        <div id="ble-nvs-status" class="status-badge" style="margin-bottom:16px; display:block; text-align:center; background:none; border-color:var(--border);">
+          Not connected
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+            <label>Motor Driver Profile</label>
+            <select id="nvs-motor-profile">
+                <option value="custom">Custom Values</option>
+                <option value="old">Old Driver (-1000 to 1000)</option>
+                <option value="new">New Driver (-650 to 650)</option>
+            </select>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="form-group">
+            <label>Min PWM</label>
+            <input type="number" id="nvs-min-pwm" placeholder="-255" />
+          </div>
+          <div class="form-group">
+            <label>Max PWM</label>
+            <input type="number" id="nvs-max-pwm" placeholder="255" />
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:12px;">
+            <label>Device ID (Max 15 chars)</label>
+            <input type="text" id="nvs-ble-device-id" maxlength="15" placeholder="e.g. BonicBotA1002" />
+        </div>
+      </div>
     </main>
 
     <!-- Sidebar: Firmware Manager -->
@@ -433,9 +477,14 @@
           Checking repository...
         </div>
 
+        <div id="versions-container" style="display:none; margin-top:12px;">
+           <label style="font-size:0.8rem; margin-bottom:4px; display:block;">Select Version to Load</label>
+           <select id="fw-version-select" style="padding:8px; font-size:0.85rem;"></select>
+        </div>
+
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:16px;">
           <button id="btn-refresh-firmware" class="btn secondary btn-sm"><i class="fas fa-sync"></i> Check</button>
-          <button id="btn-update-firmware" class="btn primary btn-sm" style="display:none;">Update</button>
+          <button id="btn-update-firmware" class="btn primary btn-sm" style="display:none;">Load</button>
         </div>
       </div>
 
@@ -456,6 +505,21 @@
           <div class="progress-fill" id="fw-progress-bar"></div>
         </div>
         <div id="fw-status" style="text-align:center; font-size:0.8rem; margin-top:8px; color:var(--text-muted);"></div>
+      </div>
+
+
+      <!-- BLE OTA Section -->
+      <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
+        <h2 style="font-size:1rem; margin-bottom:12px;">BLE OTA Update</h2>
+        <button id="btn-ble-update" class="btn secondary" style="width:100%">
+          <i class="fab fa-bluetooth-b"></i> Update via Bluetooth
+        </button>
+
+        <div class="progress-track" id="ble-progress-wrap" style="display:none">
+          <div class="progress-fill" id="ble-progress-bar"></div>
+        </div>
+        <div id="ble-status" style="text-align:center; font-size:0.8rem; margin-top:8px; color:var(--text-muted);">
+        </div>
       </div>
 
     </aside>
@@ -565,17 +629,78 @@
           latestBadge.textContent = '---';
         }
 
-        if (updateData.needs_update) {
-          statusText.innerHTML = `<span style="color:var(--warning)">Update Available</span>`;
-          updateBtn.style.display = 'inline-block';
-          updateBtn.innerHTML = `<i class="fas fa-download"></i> Get ${updateData.latest_version}`;
+        let displayVersions = [];
+        let fromOnline = false;
+
+        if (updateData.available_versions && updateData.available_versions.length > 0) {
+            displayVersions = updateData.available_versions.map(v => v.version);
+            fromOnline = true;
+        } else if (!checkOnline && status.offline_versions && status.offline_versions.length > 0) {
+            displayVersions = status.offline_versions;
+        }
+
+        if (displayVersions.length > 0) {
+            const select = el('fw-version-select');
+            select.innerHTML = '';
+            
+            displayVersions.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v + (v === status.current_version ? ' (Current)' : '');
+                
+                // Add release notes if we got them (only from online check)
+                if (fromOnline) {
+                    const r = updateData.available_versions.find(x => x.version === v);
+                    if (r && r.release_notes) opt.dataset.notes = r.release_notes;
+                }
+                select.appendChild(opt);
+            });
+            
+            if (!updateData.needs_update && displayVersions.includes(status.current_version)) {
+                select.value = status.current_version;
+            }
+            
+            el('versions-container').style.display = 'block';
+            updateBtn.style.display = 'inline-block';
+            updateBtn.innerHTML = `<i class="fas fa-download"></i> Load`;
+            
+            if (updateData.needs_update) {
+                statusText.innerHTML = `<span style="color:var(--warning)">Update Available</span>`;
+            } else if (!fromOnline) {
+                statusText.innerHTML = `<span style="color:var(--text-muted)">Showing locally cached versions</span>`;
+            } else {
+                statusText.innerHTML = `<span style="color:var(--success)">Up to date (Select alternate version manually)</span>`;
+            }
+
+            // Remove existing listener to prevent duplicates
+            const newSelect = select.cloneNode(true);
+            select.parentNode.replaceChild(newSelect, select);
+            
+            newSelect.addEventListener('change', (e) => {
+                const selectedOpt = e.target.options[e.target.selectedIndex];
+                if (selectedOpt.dataset.notes) {
+                  const changelog = el('changelog-content');
+                  changelog.innerHTML = selectedOpt.dataset.notes.replace(/\n/g, '<br>');
+                  notesDiv.style.display = 'block';
+                } else {
+                  notesDiv.style.display = 'none';
+                }
+            });
+            
         } else {
-          if (checkOnline) {
-            statusText.innerHTML = `<span style="color:var(--success)">Up to date</span>`;
+          el('versions-container').style.display = 'none';
+          if (updateData.needs_update) {
+            statusText.innerHTML = `<span style="color:var(--warning)">Update Available</span>`;
+            updateBtn.style.display = 'inline-block';
+            updateBtn.innerHTML = `<i class="fas fa-download"></i> Get ${updateData.latest_version}`;
           } else {
-            statusText.innerHTML = `<span style="color:var(--text-muted)">Ready (Local Only)</span>`;
+            if (checkOnline) {
+              statusText.innerHTML = `<span style="color:var(--success)">Up to date</span>`;
+            } else {
+              statusText.innerHTML = `<span style="color:var(--text-muted)">Ready (Local Only)</span>`;
+            }
+            updateBtn.style.display = 'none';
           }
-          updateBtn.style.display = 'none';
         }
 
         if (updateData.release_notes && updateData.release_notes.trim()) {
@@ -601,7 +726,14 @@
       updateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Downloading...';
 
       try {
-        const response = await fetch(`/api/firmware/${selectedBot}/download`, { method: 'POST' });
+        const selectedVer = el('fw-version-select') ? el('fw-version-select').value : null;
+        const payload = selectedVer ? JSON.stringify({ version: selectedVer }) : '{}';
+        
+        const response = await fetch(`/api/firmware/${selectedBot}/download`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+        });
         const result = await response.json();
 
         if (response.ok && result.success) {
@@ -765,6 +897,346 @@
         }
       });
     }
+
+    // --- BLE OTA Logic ---
+    const BLE_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const BLE_OTA_CHAR_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+    // const BLE_VERSION_CHAR_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"; // Unused for flashing
+
+    async function handleBleUpdate() {
+      const btn = el('btn-ble-update');
+      const status = el('ble-status');
+
+      if (!navigator.bluetooth) {
+        alert("Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.");
+        return;
+      }
+
+      // Add cache buster ?t=... to ensure browser always fetch the latest swapped binary
+      const firmwareUrl = `/static/${selectedBot}/mainPCB.bin?t=${new Date().getTime()}`;
+
+      if (!confirm(`Ready to flash the selected firmware for ${selectedBot} via Bluetooth?\n\nMake sure the device is powered on and in range.`)) {
+        return;
+      }
+
+      status.textContent = "Loading from storage...";
+      try {
+        const resp = await fetch(firmwareUrl); // Loads from local folder
+        if (!resp.ok) {
+          throw new Error("Local firmware file missing. Please 'Check' and 'Update' in sidebar first.");
+        }
+        const blob = await resp.blob();
+        await startBleFlash(blob); // startBleFlash handles the blob/file
+      } catch (e) {
+        alert("Failed to load firmware: " + e.message);
+        status.textContent = "Error loading firmware";
+      }
+    }
+
+    async function startBleFlash(file) {
+      const status = el('ble-status');
+      const wrap = el('ble-progress-wrap');
+      const bar = el('ble-progress-bar');
+      const btn = el('btn-ble-update');
+
+      if (!navigator.bluetooth) {
+        alert("Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or Opera.");
+        return;
+      }
+
+      btn.disabled = true;
+      wrap.style.display = 'block';
+      bar.style.width = '0%';
+      status.textContent = "Scanning for BonicBot...";
+
+      let device, server;
+
+      try {
+        // 1. Request Device
+        // We use acceptAllDevices to ensure the device shows up even if the service UUID isn't in the advertisement packet
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [BLE_SERVICE_UUID]
+        });
+
+        device.addEventListener('gattserverdisconnected', () => {
+          status.textContent = "Device Disconnected";
+          btn.disabled = false;
+        });
+
+        // 2. Connect
+        status.textContent = "Connecting...";
+        server = await device.gatt.connect();
+
+        // 3. Get Service & Characteristic
+        status.textContent = "Locating OTA Service...";
+        const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+        status.textContent = "Locating OTA Characteristic...";
+        const characteristic = await service.getCharacteristic(BLE_OTA_CHAR_UUID);
+
+        // 4. Prepare Firmware
+        const arrayBuffer = await file.arrayBuffer();
+        const firmwareBytes = new Uint8Array(arrayBuffer);
+        const totalSize = firmwareBytes.length;
+
+        status.textContent = `Starting Upload (${(totalSize / 1024).toFixed(1)} KB)...`;
+
+        // 5. Send Size (JSON)
+        // Protocol: Send {"size": <len>}
+        const sizePacket = JSON.stringify({ size: totalSize });
+        const encoder = new TextEncoder();
+        await characteristic.writeValueWithResponse(encoder.encode(sizePacket));
+
+        // CRITICAL DELAY: Give ESP32 time to erase flash partition
+        status.textContent = "Erasing flash partition (Please wait 3s)...";
+        await new Promise(r => setTimeout(r, 3000));
+
+        // 6. Send Chunks
+        const CHUNK_SIZE = 500; // Match Flutter
+        let offset = 0;
+
+        while (offset < totalSize) {
+          const end = Math.min(offset + CHUNK_SIZE, totalSize);
+          const chunk = firmwareBytes.slice(offset, end);
+
+          // Exactly match Flutter: write without response
+          await characteristic.writeValueWithoutResponse(chunk);
+
+          offset += chunk.length;
+
+          // Update Progress
+          const percent = Math.round((offset / totalSize) * 100);
+          bar.style.width = `${percent}%`;
+          status.textContent = `Uploading: ${percent}%`;
+
+          // 10ms-20ms delay is necessary for withoutResponse so we don't drop packets
+          await new Promise(r => setTimeout(r, 20));
+        }
+
+        // 7. Finish
+        status.textContent = "Upload Complete! rebooting...";
+        bar.style.background = 'var(--success)';
+
+        setTimeout(() => {
+          if (device && device.gatt.connected) device.gatt.disconnect();
+          status.textContent = "Update Successful";
+          btn.disabled = false;
+          wrap.style.display = 'none';
+          bar.style.background = ''; // reset color
+        }, 3000);
+
+      } catch (e) {
+        console.error(e);
+        status.textContent = "Error: " + e.message;
+        if (device && device.gatt.connected) device.gatt.disconnect();
+        btn.disabled = false;
+        bar.style.background = 'var(--danger)';
+      }
+    }
+
+    el('btn-ble-update').addEventListener('click', handleBleUpdate);
+
+    // --- Live NVS Control (BLE) Architecture ---
+    const CTRL_SERVICE_UUID = "00010000-0000-1000-8000-00805f9b34fb";
+    const CTRL_CHAR_UUID    = "00010001-0000-1000-8000-00805f9b34fb";
+    const FB_SERVICE_UUID   = "00020000-0000-1000-8000-00805f9b34fb";
+    const FB_CHAR_UUID      = "00020004-0000-1000-8000-00805f9b34fb";
+
+    let nvsBleDevice = null;
+    let nvsCtrlChar = null;
+    let nvsFbChar = null;
+
+    async function connectBleNvs() {
+        const statusEl = el('ble-nvs-status');
+        const writeBtn = el('btn-ble-nvs-write');
+        try {
+            if (!navigator.bluetooth) throw new Error("Web Bluetooth not supported.");
+            statusEl.className = "status-badge info";
+            statusEl.textContent = "Requesting Bluetooth Device...";
+            
+            nvsBleDevice = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: [CTRL_SERVICE_UUID, FB_SERVICE_UUID]
+            });
+
+            nvsBleDevice.addEventListener('gattserverdisconnected', () => {
+                statusEl.className = "status-badge warning";
+                statusEl.innerHTML = "Disconnected \u2014 device out of range or rebooted";
+                writeBtn.disabled = true;
+                nvsCtrlChar = null;
+            });
+
+            statusEl.textContent = "Connecting to GATT...";
+            const server = await nvsBleDevice.gatt.connect();
+
+            statusEl.textContent = "Locating Control Service...";
+            const ctrlService = await server.getPrimaryService(CTRL_SERVICE_UUID);
+            nvsCtrlChar = await ctrlService.getCharacteristic(CTRL_CHAR_UUID);
+
+            statusEl.textContent = "Locating Feedback Service...";
+            const fbService = await server.getPrimaryService(FB_SERVICE_UUID);
+            nvsFbChar = await fbService.getCharacteristic(FB_CHAR_UUID);
+
+            statusEl.textContent = "Subscribing to Notifications...";
+            await nvsFbChar.startNotifications();
+            nvsFbChar.addEventListener('characteristicvaluechanged', handleFbNotification);
+
+            statusEl.className = "status-badge success";
+            statusEl.textContent = "Connected! Reading current config...";
+            
+            writeBtn.disabled = false;
+
+            // Send standard Read Request (0x07)
+            await sendReadRequest();
+
+        } catch(e) {
+            statusEl.className = "status-badge warning";
+            statusEl.textContent = "Error: " + e.message;
+            console.error(e);
+        }
+    }
+
+    function handleFbNotification(event) {
+        const value = event.target.value; // DataView
+        // Minimum header payload length is 5 for RESP_ACK. For RESP_NVS_CONFIG it is 25.
+        if (value.byteLength < 5) return;
+        
+        const h1 = value.getUint8(0);
+        const h2 = value.getUint8(1);
+        const type = value.getUint8(2);
+        
+        if (h1 !== 0xAA || h2 !== 0x55) return;
+        
+        if (type === 0x5B) { // RESP_NVS_CONFIG
+            if (value.byteLength >= 25) { 
+                const min_pwm = value.getInt16(5, true);
+                const max_pwm = value.getInt16(7, true);
+                
+                // Extract null-terminated string up to 16 chars
+                let dev_id = "";
+                for (let i = 0; i < 16; i++) {
+                    const charCode = value.getUint8(9 + i);
+                    if (charCode === 0) break;
+                    dev_id += String.fromCharCode(charCode);
+                }
+                
+                el('nvs-min-pwm').value = min_pwm;
+                el('nvs-max-pwm').value = max_pwm;
+                el('nvs-ble-device-id').value = dev_id;
+                
+                checkProfileMatch();
+                
+                const statusEl = el('ble-nvs-status');
+                statusEl.className = "status-badge success";
+                statusEl.innerHTML = `Loaded config from <b>${dev_id}</b>`;
+            }
+        }
+    }
+
+    async function sendReadRequest() {
+        if (!nvsCtrlChar) return;
+        try {
+            // Build 10-byte request payload: AA 55 07 05 00 09 00 00 00 00
+            const buffer = new ArrayBuffer(10);
+            const vw = new DataView(buffer);
+            vw.setUint8(0, 0xAA);
+            vw.setUint8(1, 0x55);
+            vw.setUint8(2, 0x07);   // CMD_DATA_REQUEST
+            vw.setUint16(3, 5, true); // Payload length
+            vw.setUint8(5, 0x09);   // dataType = DATA_NVS_CONFIG
+            vw.setUint8(6, 0x00);   // mode = REQ_ONCE
+            vw.setUint16(7, 0, true); // interval = 0
+            vw.setUint8(9, 0x00);   // id = 0
+
+            // Try default write, fallback gracefully
+            try {
+               await nvsCtrlChar.writeValueWithResponse(buffer); 
+            } catch (err) {
+               await nvsCtrlChar.writeValueWithoutResponse(buffer);
+            }
+        } catch (e) {
+            console.error("Read request failed", e);
+        }
+    }
+
+    async function sendWriteConfig() {
+        if (!nvsCtrlChar) return;
+        const statusEl = el('ble-nvs-status');
+        statusEl.className = "status-badge info";
+        statusEl.textContent = "Writing config...";
+
+        try {
+            const min_pwm = parseInt(el('nvs-min-pwm').value) || 0;
+            const max_pwm = parseInt(el('nvs-max-pwm').value) || 0;
+            let dev_id = el('nvs-ble-device-id').value.trim();
+            
+            // Build 25-byte payload
+            const buffer = new ArrayBuffer(25);
+            const vw = new DataView(buffer);
+            
+            vw.setUint8(0, 0xAA);
+            vw.setUint8(1, 0x55);
+            vw.setUint8(2, 0x09); // CMD_UPDATE_NVS
+            vw.setUint16(3, 20, true); // Payload length: 20
+            
+            vw.setInt16(5, min_pwm, true); // LSB/MSB
+            vw.setInt16(7, max_pwm, true); // LSB/MSB
+            
+            for (let i = 0; i < 16; i++) {
+                if (i < dev_id.length) {
+                    vw.setUint8(9 + i, dev_id.charCodeAt(i));
+                } else {
+                    vw.setUint8(9 + i, 0); // Null padding
+                }
+            }
+            
+            try {
+               await nvsCtrlChar.writeValueWithResponse(buffer);
+            } catch (err) {
+               await nvsCtrlChar.writeValueWithoutResponse(buffer);
+            }
+            
+            statusEl.className = "status-badge success";
+            statusEl.textContent = "Config Saved Successfully!";
+            
+            // Verify by actively requesting the updated NVS struct
+            setTimeout(sendReadRequest, 500);
+            
+        } catch (e) {
+            statusEl.className = "status-badge warning";
+            statusEl.textContent = "Save failed: " + e.message;
+            console.error(e);
+        }
+    }
+
+    el('btn-ble-nvs-connect').addEventListener('click', connectBleNvs);
+    el('btn-ble-nvs-write').addEventListener('click', sendWriteConfig);
+
+    function checkProfileMatch() {
+        const minVal = parseInt(el('nvs-min-pwm').value);
+        const maxVal = parseInt(el('nvs-max-pwm').value);
+        const profileSelect = el('nvs-motor-profile');
+        if (minVal === -1000 && maxVal === 1000) {
+            profileSelect.value = 'old';
+        } else if (minVal === -650 && maxVal === 650) {
+            profileSelect.value = 'new';
+        } else {
+            profileSelect.value = 'custom';
+        }
+    }
+
+    el('nvs-motor-profile').addEventListener('change', (e) => {
+        if (e.target.value === 'old') {
+            el('nvs-min-pwm').value = -1000;
+            el('nvs-max-pwm').value = 1000;
+        } else if (e.target.value === 'new') {
+            el('nvs-min-pwm').value = -650;
+            el('nvs-max-pwm').value = 650;
+        }
+    });
+
+    el('nvs-min-pwm').addEventListener('input', checkProfileMatch);
+    el('nvs-max-pwm').addEventListener('input', checkProfileMatch);
 
     // Init
     window.addEventListener('DOMContentLoaded', () => {
