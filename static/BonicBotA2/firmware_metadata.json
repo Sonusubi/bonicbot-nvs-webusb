@@ -1,9 +1,9 @@
 {
-  "version": "v1.0.7",
+  "version": "v1.0.6",
   "downloaded_at": "2026-04-08T07:44:24.008028",
   "last_check": 1775630664.008048,
-  "size": 1115952,
-  "hash": "50792795b72a06e18c3b03c7323ee3dd14ec1165e251d8dfdfd40e5e36882526",
-  "release_notes": "* Implemented dataframe-based communication for improved data handling and reliability\r\n* Optimized hardware drivers for better performance and stability\r\n* Added SOC (State of Charge) estimation algorithm\r\n* Implemented SOC-based cutoff mechanism for battery protection\r\n* Improved overall system efficiency and responsiveness\r\n* Minor bug fixes and internal optimizations\r\n\r\n",
+  "size": 1116400,
+  "hash": "b1ae3010095bb98bad46127044edd3188eab39e30783dad61ee4a76a0144b7ea",
+  "release_notes": "Offline swapped (no cached notes)",
   "prerelease": false
 }

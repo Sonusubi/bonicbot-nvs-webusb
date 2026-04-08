@@ -245,9 +245,15 @@ class FirmwareManager:
                     'size': release_info.get('size', os.path.getsize(self.firmware_path)),
                     'hash': file_hash,
                     'release_notes': release_info.get('release_notes', ''),
-                    'prerelease': release_info.get('prerelease', False)
+                    'prerelease': release_info.get('prerelease', False),
+                    'published_at': release_info.get('published_at', '')
                 }
                 self._save_metadata(metadata)
+                
+                # ALSO cache this metadata permanently for offline swaps!
+                with open(os.path.join(versions_dir, f"{release_info['version']}.json"), 'w') as mf:
+                    json.dump(metadata, mf, indent=2)
+                
                 self.current_version = release_info['version']
                 
                 msg = f"Activated latest firmware version {release_info['version']}."
@@ -376,10 +382,20 @@ def download_firmware(bot_name):
             import shutil
             shutil.copy2(offline_target_path, manager.firmware_path)
             
-            # Update metadata
-            m = manager._load_metadata()
-            m['version'] = target_version
-            manager._save_metadata(m)
+            # Restore complete cached metadata if available
+            cached_meta_path = os.path.join(versions_dir, f"{target_version}.json")
+            if os.path.exists(cached_meta_path):
+                with open(cached_meta_path, 'r') as mf:
+                    m = json.load(mf)
+                manager._save_metadata(m)
+            else:
+                m = manager._load_metadata()
+                m['version'] = target_version
+                m['size'] = os.path.getsize(manager.firmware_path)
+                m['hash'] = manager._get_file_hash(manager.firmware_path)
+                m['release_notes'] = "Offline swapped (no cached notes)"
+                manager._save_metadata(m)
+                
             manager.current_version = target_version
             
             return jsonify({'success': True, 'message': f'Swapped instantly to local cached version: {target_version}'})

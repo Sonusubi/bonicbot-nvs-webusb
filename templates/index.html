@@ -656,10 +656,6 @@
                 select.appendChild(opt);
             });
             
-            if (!updateData.needs_update && displayVersions.includes(status.current_version)) {
-                select.value = status.current_version;
-            }
-            
             el('versions-container').style.display = 'block';
             updateBtn.style.display = 'inline-block';
             updateBtn.innerHTML = `<i class="fas fa-download"></i> Load`;
@@ -675,6 +671,11 @@
             // Remove existing listener to prevent duplicates
             const newSelect = select.cloneNode(true);
             select.parentNode.replaceChild(newSelect, select);
+            
+            // ALWAYS highlight the active firmare in the dropdown
+            if (displayVersions.includes(status.current_version)) {
+                newSelect.value = status.current_version;
+            }
             
             newSelect.addEventListener('change', (e) => {
                 const selectedOpt = e.target.options[e.target.selectedIndex];
@@ -723,7 +724,7 @@
     async function updateFirmware() {
       const updateBtn = el('btn-update-firmware');
       updateBtn.disabled = true;
-      updateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Downloading...';
+      updateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Loading...';
 
       try {
         const selectedVer = el('fw-version-select') ? el('fw-version-select').value : null;
