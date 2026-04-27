@@ -1,0 +1,10 @@
+{
+  "version": "v1.0.4",
+  "downloaded_at": "2026-04-25T13:59:30.663258",
+  "last_check": 1777121970.6632774,
+  "size": 986688,
+  "hash": "226fef53c310eb041d215eb0bafdcf656f75b01b8f79fd52e8913dd8e90a1d63",
+  "release_notes": "Dead band increased for rc control",
+  "prerelease": false,
+  "published_at": "2025-09-09T16:13:10Z"
+}

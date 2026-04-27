@@ -1,0 +1,10 @@
+{
+  "version": "v1.0.3",
+  "downloaded_at": "2026-04-24T07:47:37.533600",
+  "last_check": 1777013257.5336199,
+  "size": 1127456,
+  "hash": "525e1aada1983dfdfdb146dbf3fe6a51e5cb45c4441033379a1dfd31bec3d88e",
+  "release_notes": "Gripper limit added",
+  "prerelease": false,
+  "published_at": "2026-01-30T12:30:31Z"
+}

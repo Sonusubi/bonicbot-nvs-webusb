@@ -15,30 +15,30 @@
 
   <style>
     :root {
-      /* Palette: Black & Blue */
-      --bg-body: #020408;
-      --bg-card: #0a0f1c;
-      --bg-card-hover: #0e1526;
+      /* Refined Midnight Tech Palette - Psychological Optimization */
+      --bg-body: #05070a;
+      --bg-card: rgba(13, 17, 23, 0.95);
+      --bg-card-hover: rgba(18, 24, 33, 1);
 
-      --primary: #2979ff;
-      --primary-hover: #5390ff;
-      --primary-glow: rgba(41, 121, 255, 0.4);
+      --primary: #58a6ff; /* Softer, trusted blue */
+      --primary-hover: #79c0ff;
+      --primary-glow: rgba(88, 166, 255, 0.2);
 
-      --accent: #00e5ff;
-      /* Cyan accent for highlights */
+      --accent: #bc8cff; /* Sophisticated Purple */
+      --accent-glow: rgba(188, 140, 255, 0.15);
 
-      --danger: #ff4757;
-      --success: #2ed573;
-      --warning: #ffa502;
+      --danger: #ff7b72;
+      --success: #3fb950;
+      --warning: #d29922;
 
-      --text-main: #e3f2fd;
-      --text-muted: #607d8b;
+      --text-main: #e3e6e8;
+      --text-muted: #abb4be; /* Increased contrast from 8b949e */
 
-      --border: rgba(41, 121, 255, 0.1);
-      --glass: rgba(10, 15, 28, 0.7);
-
-      --radius: 16px;
-      --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --border: rgba(48, 54, 61, 0.8);
+      --border-glow: rgba(88, 166, 255, 0.3);
+      
+      --radius: 12px;
+      --shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
     }
 
     * {
@@ -50,13 +50,17 @@
       margin: 0;
       min-height: 100vh;
       font-family: 'Inter', sans-serif;
-      background: radial-gradient(circle at top center, #0d1b33 0%, #020408 100%);
+      background-color: var(--bg-body);
+      background-image: 
+        radial-gradient(circle at 50% -20%, #161b22 0%, transparent 80%);
       color: var(--text-main);
       display: flex;
       justify-content: center;
       padding: 20px;
       -webkit-font-smoothing: antialiased;
     }
+
+
 
     /* Layout */
     .container {
@@ -76,7 +80,7 @@
       }
     }
 
-    /* Cards */
+    /* Cards - Professional & Deep */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -84,54 +88,56 @@
       padding: 24px;
       box-shadow: var(--shadow);
       position: relative;
-      overflow: hidden;
-      backdrop-filter: blur(10px);
-      transition: transform 0.2s ease, border-color 0.2s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .card:hover {
-      border-color: rgba(41, 121, 255, 0.3);
+        border-color: #444c56;
     }
 
-    /* Header */
+    /* Header - Compact */
     .header {
       grid-column: 1 / -1;
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 20px;
-      background: rgba(10, 15, 28, 0.6);
-      border-bottom: 1px solid var(--border);
-      padding: 20px 24px;
+      background: rgba(13, 17, 23, 0.8);
+      border: 1px solid var(--border);
+      padding: 12px 24px;
       border-radius: var(--radius);
       backdrop-filter: blur(12px);
     }
 
     .brand-icon {
-      width: 50px;
-      height: 50px;
-      background: linear-gradient(135deg, var(--primary), var(--accent));
-      border-radius: 12px;
+      width: 36px;
+      height: 36px;
+      background: #161b22;
+      border: 1px solid var(--border);
+      border-radius: 8px;
       display: grid;
       place-items: center;
-      color: #000;
-      font-size: 1.5rem;
-      font-weight: 800;
-      box-shadow: 0 0 20px var(--primary-glow);
+      color: var(--primary);
+      font-size: 1.1rem;
+    }
+
+    .brand-text-wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
 
     .brand-text h1 {
       margin: 0;
-      font-size: 1.4rem;
+      font-size: 1.1rem;
       font-weight: 700;
-      background: linear-gradient(90deg, #fff, #90caf9);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: #fff;
     }
 
     .brand-text p {
-      margin: 4px 0 0 0;
+      margin: 0;
       color: var(--text-muted);
-      font-size: 0.9rem;
+      font-size: 0.8rem;
     }
 
     /* Typography */
@@ -152,9 +158,33 @@
     label {
       display: block;
       margin-bottom: 8px;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      font-weight: 500;
+      font-size: 0.9rem;
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .help-tooltip {
+        display: inline-block;
+        margin-left: 4px;
+        color: var(--primary);
+        cursor: help;
+        font-size: 0.8rem;
+    }
+    
+    .help-tooltip:hover::after {
+        content: attr(data-tip);
+        position: absolute;
+        background: #1f242c;
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        font-size: 0.75rem;
+        width: 200px;
+        z-index: 100;
+        margin-top: -35px;
+        margin-left: 10px;
+        box-shadow: var(--shadow);
     }
 
     /* Inputs */
@@ -195,25 +225,32 @@
     }
 
     .btn.primary {
-      background: linear-gradient(135deg, var(--primary), #2962ff);
-      color: white;
-      box-shadow: 0 4px 15px var(--primary-glow);
+      background: var(--primary);
+      color: #0d1117;
+      border: none;
+      font-weight: 700;
     }
 
     .btn.primary:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px var(--primary-glow);
+      background: var(--primary-hover);
+      box-shadow: 0 0 20px var(--primary-glow);
     }
 
     .btn.accent {
-      background: linear-gradient(135deg, var(--accent), #00b0ff);
-      color: #000;
+      background: #21262d;
+      color: var(--accent);
+      border: 1px solid #444c56;
+    }
+
+    .btn.accent:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: rgba(188, 140, 255, 0.1);
     }
 
     .btn.secondary {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text-main);
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #444c56;
     }
 
     .btn.secondary:hover {
@@ -258,10 +295,23 @@
     }
 
     .status-badge.warning {
-      background: rgba(255, 165, 2, 0.1);
-      color: var(--warning);
-      border-color: rgba(255, 165, 2, 0.2);
+      background: rgba(255, 123, 114, 0.1);
+      color: var(--danger);
+      border-color: rgba(255, 123, 114, 0.2);
     }
+
+    .indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        background: var(--text-muted);
+        margin-right: 6px;
+    }
+    
+    .indicator.online { background: var(--success); box-shadow: 0 0 10px var(--success); }
+    .indicator.offline { background: var(--danger); }
+    .indicator.syncing { background: var(--warning); animation: pulse 1s infinite; }
 
     /* Modules */
     .action-group {
@@ -298,8 +348,105 @@
       height: 100%;
       background: var(--primary);
       width: 0%;
-      box-shadow: 0 0 10px var(--primary);
-      transition: width 0.3s ease;
+      transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    /* --- Aggressive Animations --- */
+    @keyframes entryZoom {
+      0% { opacity: 0; transform: scale(0.8) translateY(40px); filter: blur(10px); }
+      70% { transform: scale(1.02) translateY(-5px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+    }
+
+    @keyframes glitchPulse {
+      0% { box-shadow: 0 0 0 0 rgba(41, 121, 255, 0.6); transform: scale(1); }
+      50% { box-shadow: 0 0 25px 5px rgba(0, 229, 255, 0.4); transform: scale(1.03); }
+      100% { box-shadow: 0 0 0 0 rgba(41, 121, 255, 0.6); transform: scale(1); }
+    }
+
+    @keyframes iconSpin {
+      0% { transform: rotate(0deg) scale(1); }
+      50% { transform: rotate(180deg) scale(1.2); color: var(--accent); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+
+    @keyframes textGlow {
+      0%, 100% { filter: brightness(1) drop-shadow(0 0 2px var(--primary)); }
+      50% { filter: brightness(1.5) drop-shadow(0 0 8px var(--accent)); }
+    }
+
+    .animate-zoom-in {
+      animation: entryZoom 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .delay-1 { animation-delay: 0.15s; }
+    .delay-2 { animation-delay: 0.3s; }
+
+    .brand-icon i {
+      animation: iconSpin 4s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+    }
+
+    .brand-text h1 {
+      animation: textGlow 3s ease-in-out infinite;
+    }
+
+    /* Aggressive Hover States */
+    .btn {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-3px) scale(1.05);
+      letter-spacing: 0.5px;
+      filter: brightness(1.2);
+    }
+
+    .btn:active {
+      transform: translateY(1px) scale(0.95);
+    }
+
+    .card {
+      transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
+    }
+
+    .card:hover {
+      transform: translateY(-8px) scale(1.01);
+      border-color: var(--primary);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 15px rgba(41, 121, 255, 0.2);
+    }
+
+    .btn.primary {
+      animation: glitchPulse 2s infinite;
+    }
+
+    /* Interaction Feedback */
+    input:focus, select:focus {
+      transform: scale(1.01);
+      border-color: var(--accent) !important;
+    }
+
+    .status-badge {
+      transition: all 0.3s ease;
+    }
+
+    .status-badge:hover {
+      transform: scale(1.1) rotate(2deg);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-body);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--primary);
     }
 
     /* Firmware List */
@@ -326,50 +473,38 @@
       display: block;
       width: 100%;
     }
-
-    /* Animations */
-    @keyframes pulse {
-      0% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.5;
-      }
-
-      100% {
-        opacity: 1;
-      }
-    }
-
-    .animate-pulse {
-      animation: pulse 2s infinite;
-    }
   </style>
 </head>
 
 <body>
 
-  <div class="container">
+  <div class="container animate-zoom-in">
 
-    <!-- Branding Header -->
-    <header class="header">
-      <div class="brand-icon"><i class="fas fa-robot"></i></div>
-      <div class="brand-text">
-        <h1>BonicBot NVS</h1>
-        <p>Advanced Firmware & Configuration Manager</p>
+    <!-- Header Area -->
+    <header class="header card animate-zoom-in">
+      <div class="brand-text-wrap">
+          <div class="brand-icon"><i class="fas fa-robot"></i></div>
+          <div class="brand-text">
+            <h1>BonicBot NVS</h1>
+            <p>Firmware & Config Suite</p>
+          </div>
+      </div>
+      <div style="display:flex; gap:12px;">
+          <div class="status-badge" style="background:none; border-color:transparent; font-size:0.75rem;">
+              <span class="indicator online"></span> System Operations Ready
+          </div>
       </div>
     </header>
 
-    <!-- Main Generator Panel -->
-    <main class="card">
-      <h2><i class="fas fa-microchip"></i> Device Configuration</h2>
+    <!-- Main Action Form -->
+    <main class="card animate-zoom-in delay-1">
+      <h2><i class="fas fa-microchip"></i> NVS Configuration</h2>
       <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:24px;">
         Generate unique NVS binaries for BonicBot units. Download the binary or flash directly via WebUSB.
       </p>
 
       <div class="form-group">
-        <label for="device_id">Device Identifier (Serial Number)</label>
+        <label for="device_id">Device Identifier <span class="help-tooltip" data-tip="Unique ID burned into the robot's memory for identification."><i class="fas fa-question-circle"></i></span></label>
         <div style="position:relative;">
           <input id="device_id" type="text" placeholder="e.g. BonicBotA1002" value="BonicBotA1002" />
           <i class="fas fa-fingerprint" style="position:absolute; right:16px; top:14px; color:var(--text-muted);"></i>
@@ -405,9 +540,9 @@
 
       <!-- Live NVS Control (BLE) Area -->
       <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border);">
-        <h2><i class="fab fa-bluetooth-b"></i> Live NVS Control (BLE)</h2>
+        <h2><i class="fab fa-bluetooth-b"></i> Live NVS Control <span class="help-tooltip" data-tip="Configure non-volatile storage (Device ID/PWM) instantly over Bluetooth."><i class="fas fa-question-circle"></i></span></h2>
         <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:16px;">
-          Read from or write NVS configuration directly to the connected robot over Bluetooth.
+          Direct device parameter management over BLE link.
         </p>
 
         <div style="display:flex; gap:12px; margin-bottom:16px;">
@@ -419,8 +554,8 @@
           </button>
         </div>
 
-        <div id="ble-nvs-status" class="status-badge" style="margin-bottom:16px; display:block; text-align:center; background:none; border-color:var(--border);">
-          Not connected
+        <div id="ble-nvs-status" class="status-badge" style="margin-bottom:16px; width:100%; justify-content:center; background:rgba(0,0,0,0.2); border-color:var(--border);">
+          <span class="indicator" id="ble-nvs-indicator"></span> <span>Not connected</span>
         </div>
 
         <div class="form-group" style="margin-bottom:12px;">
@@ -449,11 +584,11 @@
     </main>
 
     <!-- Sidebar: Firmware Manager -->
-    <aside class="card">
+    <aside class="card animate-zoom-in delay-2">
       <h2><i class="fas fa-cloud-download-alt"></i> Firmware</h2>
 
       <div style="margin-bottom:20px;">
-        <label for="bot-select">Target Model</label>
+        <label for="bot-select">Target Model <span class="help-tooltip" data-tip="The specific hardware series you are flashing."><i class="fas fa-question-circle"></i></span></label>
         <select id="bot-select">
           {% for bot in bots %}
           <option value="{{ bot }}">{{ bot }}</option>
@@ -470,7 +605,9 @@
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <span style="font-size:0.85rem; color:var(--text-muted);">Latest Available</span>
-          <span class="status-badge info" id="latest-version-badge">---</span>
+          <span class="status-badge info" id="latest-version-badge" style="min-width:60px; justify-content:center;">
+              <i class="fas fa-circle-notch fa-spin" style="font-size:0.7rem;"></i>
+          </span>
         </div>
 
         <div id="firmware-status-text" style="font-size:0.8rem; margin-top:12px; color:var(--text-muted);">
@@ -626,7 +763,7 @@
         if (updateData.latest_version) {
           latestBadge.textContent = updateData.latest_version;
         } else if (!checkOnline) {
-          latestBadge.textContent = '---';
+          latestBadge.innerHTML = '<i class="fas fa-history" style="opacity:0.5"></i>';
         }
 
         let displayVersions = [];
@@ -1142,10 +1279,14 @@
                 
                 checkProfileMatch();
                 
-                const statusEl = el('ble-nvs-status');
-                statusEl.className = "status-badge success";
-                statusEl.innerHTML = `Loaded config from <b>${dev_id}</b> (FW: ${window.activeBotFwVersion})`;
-            }
+            const statusEl = el('ble-nvs-status');
+            const indicator = el('ble-nvs-indicator');
+            
+            statusEl.className = "status-badge success";
+            statusEl.style.width = "100%";
+            statusEl.innerHTML = `<span class="indicator online"></span> Loaded config from <b>${dev_id}</b> (FW: ${window.activeBotFwVersion})`;
+            if (indicator) indicator.className = "indicator online";
+        }
         }
     }
 
