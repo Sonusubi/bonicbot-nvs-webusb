@@ -27,6 +27,11 @@ FIRMWARE_REPOS = {
         "owner": "Autobonics",
         "repo": "bonicbota2-firmware-pcb",
         "asset_name": "mainPCB.bin"
+    },
+    "Hardware-testing": {
+        "owner": "Sonusubi",
+        "repo": "hw-test",
+        "asset_name": "mainPCB.bin"
     }
 }
 FIRMWARE_ASSET_NAME = "mainPCB.bin"
@@ -544,6 +549,7 @@ def generate_single():
     """Generate single NVS binary file and send it as attachment."""
     try:
         device_id = (request.form.get('device_id') or '').strip()
+        robot_model = (request.form.get('robot_model') or '').strip()
 
         if not device_id:
             return jsonify({'error': 'Device ID is required'}), 400
@@ -553,6 +559,8 @@ def generate_single():
             ['bonicbot', 'namespace', '', ''],
             ['device_id', 'data', 'string', device_id]
         ]
+        if robot_model:
+            csv_content.append(['robot_model', 'data', 'string', robot_model])
 
         bin_path = _generate_nvs_bin(csv_content)
 
