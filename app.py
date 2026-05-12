@@ -21,7 +21,8 @@ FIRMWARE_REPOS = {
     "BonicBotS1-Head": {
         "owner": "Sonusubi",
         "repo": "headpcb",
-        "asset_name": "headPCB.bin"
+        "asset_name": "headPCB.bin",
+        "own_bootloader": True
     },
     "BonicBotA1": {
         "owner": "Autobonics",
@@ -77,10 +78,57 @@ class FirmwareManager:
                     metadata = json.load(f)
                     self.current_version = metadata.get('version')
                     self.last_check_time = metadata.get('last_check', 0)
+                    # Repair stale manifest on startup
+                    if self.current_version:
+                        self._generate_manifest(self.current_version)
                     return metadata
         except Exception as e:
             print(f"⚠️  Warning: Could not load firmware metadata for {self.bot_name}: {e}")
         return {}
+
+    def _generate_manifest(self, version):
+        """Regenerate manifest.json so esp-web-tools always flashes the correct binary."""
+        try:
+            os.makedirs(self.static_dir, exist_ok=True)
+
+            # Some bots (e.g. S1-Head) ship their own bootloader/partitions
+            own_bootloader = FIRMWARE_REPOS.get(self.bot_name, {}).get('own_bootloader', False)
+            if own_bootloader:
+                stem = os.path.splitext(self.asset_name)[0]  # e.g. "headPCB"
+                bootloader_path = f"/static/{self.bot_name}/{stem}.ino.bootloader.bin"
+                partitions_path = f"/static/{self.bot_name}/{stem}.ino.partitions.bin"
+            else:
+                bootloader_path = "/static/mainPCB.ino.bootloader.bin"
+                partitions_path = "/static/mainPCB.ino.partitions.bin"
+
+            # Always point to the canonical asset file (never versioned paths).
+            # The ?v= query param busts the browser cache whenever the version changes,
+            # preventing stale binaries from being flashed via esp-web-tools.
+            v_slug = (version or "unknown").replace(" ", "_")
+            firmware_path = f"/static/{self.bot_name}/{self.asset_name}?v={v_slug}"
+
+            manifest = {
+                "name": f"{self.bot_name} Firmware",
+                "version": version or "Unknown",
+                "new_install_prompt_erase": True,
+                "builds": [
+                    {
+                        "chipFamily": "ESP32-S3",
+                        "parts": [
+                            {"path": bootloader_path, "offset": 0},
+                            {"path": partitions_path, "offset": 32768},
+                            {"path": firmware_path, "offset": 65536}
+                        ]
+                    }
+                ]
+            }
+
+            manifest_path = os.path.join(self.static_dir, 'manifest.json')
+            with open(manifest_path, 'w') as f:
+                json.dump(manifest, f, indent=2)
+            print(f"✅ Manifest updated for {self.bot_name} → {version}")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not update manifest for {self.bot_name}: {e}")
     
     def _save_metadata(self, metadata):
         """Save firmware metadata to local file."""
@@ -265,6 +313,9 @@ class FirmwareManager:
                     json.dump(metadata, mf, indent=2)
                 
                 self.current_version = release_info['version']
+
+                # Regenerate manifest so the flasher always uses the correct binary + version
+                self._generate_manifest(self.current_version)
                 
                 msg = f"Activated latest firmware version {release_info['version']}."
                 return True, msg
@@ -407,7 +458,8 @@ def download_firmware(bot_name):
                 manager._save_metadata(m)
                 
             manager.current_version = target_version
-            
+            manager._generate_manifest(target_version)
+
             return jsonify({'success': True, 'message': f'Swapped instantly to local cached version: {target_version}'})
             
         release_info = None

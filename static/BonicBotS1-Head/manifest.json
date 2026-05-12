@@ -6,9 +6,18 @@
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "/static/BonicBotS1-Head/headPCB.ino.bootloader.bin", "offset": 0 },
-        { "path": "/static/BonicBotS1-Head/headPCB.ino.partitions.bin", "offset": 32768 },
-        { "path": "/static/BonicBotS1-Head/headPCB.bin", "offset": 65536 }
+        {
+          "path": "/static/BonicBotS1-Head/headPCB.ino.bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "/static/BonicBotS1-Head/headPCB.ino.partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "/static/BonicBotS1-Head/headPCB.bin?v=v1.0.0",
+          "offset": 65536
+        }
       ]
     }
   ]

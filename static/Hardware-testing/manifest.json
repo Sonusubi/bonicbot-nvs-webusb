@@ -6,9 +6,18 @@
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "/static/mainPCB.ino.bootloader.bin", "offset": 0 },
-        { "path": "/static/mainPCB.ino.partitions.bin", "offset": 32768 },
-        { "path": "/static/Hardware-testing/mainPCB.bin", "offset": 65536 }
+        {
+          "path": "/static/mainPCB.ino.bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "/static/mainPCB.ino.partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "/static/Hardware-testing/mainPCB.bin?v=v1.0.0",
+          "offset": 65536
+        }
       ]
     }
   ]

@@ -15,7 +15,7 @@
           "offset": 32768
         },
         {
-          "path": "/static/BonicBotS1/versions/v1.0.4.bin",
+          "path": "/static/BonicBotS1/mainPCB.bin?v=v1.0.4",
           "offset": 65536
         }
       ]
