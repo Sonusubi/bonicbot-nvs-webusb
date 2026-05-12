@@ -1,0 +1,15 @@
+{
+  "name": "BonicBotS1-Head Firmware",
+  "version": "v1.0.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "/static/BonicBotS1-Head/headPCB.ino.bootloader.bin", "offset": 0 },
+        { "path": "/static/BonicBotS1-Head/headPCB.ino.partitions.bin", "offset": 32768 },
+        { "path": "/static/BonicBotS1-Head/headPCB.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

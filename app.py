@@ -18,6 +18,11 @@ FIRMWARE_REPOS = {
         "repo": "bonicbot-firmware-mainPCB",
         "asset_name": "mainPCB.bin"
     },
+    "BonicBotS1-Head": {
+        "owner": "Sonusubi",
+        "repo": "headpcb",
+        "asset_name": "headPCB.bin"
+    },
     "BonicBotA1": {
         "owner": "Autobonics",
         "repo": "bonicbota1-firmware-pcb",
