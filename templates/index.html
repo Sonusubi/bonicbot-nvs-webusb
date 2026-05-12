@@ -522,6 +522,20 @@
         </div>
       </div>
 
+      <div class="form-group" id="nvs_calibration_group" style="margin-top:16px; margin-bottom:20px; display:none;">
+        <label>Motor Calibration <span class="help-tooltip" data-tip="Fixed-point speed scale (1000 = 1.000x). Adjust in steps of 5-10 to balance motors."><i class="fas fa-question-circle"></i></span></label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div>
+            <label for="left_motor_scale" style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">Left Motor Scale</label>
+            <input type="number" id="left_motor_scale" value="1000" step="5" />
+          </div>
+          <div>
+            <label for="right_motor_scale" style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">Right Motor Scale</label>
+            <input type="number" id="right_motor_scale" value="1000" step="5" />
+          </div>
+        </div>
+      </div>
+
       <div class="action-group">
         <button id="btn-generate-download" class="btn secondary">
           <i class="fas fa-download"></i> Generate & Download
@@ -916,14 +930,32 @@
     }
 
     // --- Event Listeners ---
+    function updateVisibility() {
+      if (el('nvs_robot_model_group')) {
+        const isS1 = selectedBot.includes('S1');
+        el('nvs_robot_model_group').style.display = isS1 ? 'block' : 'none';
+        
+        if (el('nvs_calibration_group')) {
+          const modelVal = el('nvs_robot_model') ? el('nvs_robot_model').value : '';
+          el('nvs_calibration_group').style.display = (isS1 && modelVal === 'S1 Lite') ? 'block' : 'none';
+        }
+      }
+    }
+
     el('bot-select').addEventListener('change', (e) => {
       selectedBot = e.target.value;
-      if (el('nvs_robot_model_group')) {
-        el('nvs_robot_model_group').style.display = selectedBot.includes('S1') ? 'block' : 'none';
-      }
+      updateVisibility();
       refreshFirmwareStatus(); // Local only
       updateFlasherManifest();
     });
+
+    if (el('nvs_robot_model')) {
+      el('nvs_robot_model').addEventListener('change', updateVisibility);
+    }
+    
+    // Initial visibility check
+    updateVisibility();
+
     el('btn-refresh-firmware').addEventListener('click', () => refreshFirmwareStatus(true));
     el('btn-update-firmware').addEventListener('click', updateFirmware);
 
@@ -938,7 +970,12 @@
       
       const modelInput = el('nvs_robot_model');
       if (modelInput && selectedBot.includes('S1')) {
-        form.append('robot_model', modelInput.value.trim());
+        const modelVal = modelInput.value.trim();
+        form.append('robot_model', modelVal);
+        if (modelVal === 'S1 Lite') {
+          form.append('left_motor_scale', el('left_motor_scale') ? el('left_motor_scale').value : '1000');
+          form.append('right_motor_scale', el('right_motor_scale') ? el('right_motor_scale').value : '1000');
+        }
       } else if (selectedBot.includes('S1')) {
         form.append('robot_model', selectedBot);
       }

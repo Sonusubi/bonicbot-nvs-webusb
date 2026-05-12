@@ -1,0 +1,10 @@
+{
+  "version": "v1.0.6",
+  "downloaded_at": "2026-05-05T11:42:48.680681",
+  "last_check": 1777977768.6806955,
+  "size": 986176,
+  "hash": "3e0694d94dc7a8ef59e2574f7727070cd9fcdbbe45875526aff551203137c93b",
+  "release_notes": "Calibration support added fof s1-Lite",
+  "prerelease": false,
+  "published_at": "2026-05-05T10:42:07Z"
+}

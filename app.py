@@ -555,6 +555,8 @@ def generate_single():
     try:
         device_id = (request.form.get('device_id') or '').strip()
         robot_model = (request.form.get('robot_model') or '').strip()
+        left_motor_scale = request.form.get('left_motor_scale', '1000')
+        right_motor_scale = request.form.get('right_motor_scale', '1000')
 
         if not device_id:
             return jsonify({'error': 'Device ID is required'}), 400
@@ -566,6 +568,14 @@ def generate_single():
         ]
         if robot_model:
             csv_content.append(['robot_model', 'data', 'string', robot_model])
+            
+            # Calibration for S1 Lite
+            if robot_model.lower() == 's1 lite':
+                # NVS keys are strictly limited to 15 characters by ESP-IDF.
+                # Truncating "left_motor_scale" -> "left_motor_scal"
+                # Truncating "right_motor_scale" -> "right_motor_sca"
+                csv_content.append(['left_motor_scale'[:15], 'data', 'i16', left_motor_scale])
+                csv_content.append(['right_motor_scale'[:15], 'data', 'i16', right_motor_scale])
 
         bin_path = _generate_nvs_bin(csv_content)
 

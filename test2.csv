@@ -1,0 +1,4 @@
+key,type,encoding,value
+bonicbot,namespace,,
+left_motor_scal,data,i16,1000
+right_motor_sca,data,i16,1000
