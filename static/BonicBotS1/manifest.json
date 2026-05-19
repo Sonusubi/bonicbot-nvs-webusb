@@ -1,6 +1,6 @@
 {
   "name": "BonicBotS1 Firmware",
-  "version": "v1.0.4",
+  "version": "v1.0.6",
   "new_install_prompt_erase": true,
   "builds": [
     {
@@ -15,7 +15,7 @@
           "offset": 32768
         },
         {
-          "path": "/static/BonicBotS1/mainPCB.bin?v=v1.0.4",
+          "path": "/static/BonicBotS1/mainPCB.bin?v=v1.0.6",
           "offset": 65536
         }
       ]

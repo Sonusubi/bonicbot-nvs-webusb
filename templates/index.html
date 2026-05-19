@@ -563,24 +563,28 @@
         </div>
       </div>
 
-      <!-- Live NVS Control (BLE) Area -->
+      <!-- Live NVS Control Area -->
       <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border);">
-        <h2><i class="fab fa-bluetooth-b"></i> Live NVS Control <span class="help-tooltip" data-tip="Configure non-volatile storage (Device ID/PWM) instantly over Bluetooth."><i class="fas fa-question-circle"></i></span></h2>
+        <h2><i class="fas fa-satellite-dish"></i> Live NVS Control <span class="help-tooltip" data-tip="Configure non-volatile storage (Device ID/PWM/Encoder) instantly over Bluetooth or USB."><i class="fas fa-question-circle"></i></span></h2>
         <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:16px;">
-          Direct device parameter management over BLE link.
+          Direct device parameter management. Select interface and connect.
         </p>
 
-        <div style="display:flex; gap:12px; margin-bottom:16px;">
-          <button id="btn-ble-nvs-connect" class="btn secondary" style="flex:1;">
-            <i class="fas fa-link"></i> Connect & Read
+        <div style="display:grid; grid-template-columns: 0.5fr 1fr 1fr; gap:12px; margin-bottom:16px;">
+          <select id="nvs-connection-mode" style="padding: 8px;">
+            <option value="ble">Bluetooth</option>
+            <option value="usb">USB/Serial</option>
+          </select>
+          <button id="btn-nvs-connect" class="btn secondary">
+            <i class="fas fa-link"></i> Connect
           </button>
-          <button id="btn-ble-nvs-write" class="btn primary" style="flex:1;" disabled>
-            <i class="fas fa-save"></i> Save to Device
+          <button id="btn-nvs-write" class="btn primary" disabled>
+            <i class="fas fa-save"></i> Save
           </button>
         </div>
 
-        <div id="ble-nvs-status" class="status-badge" style="margin-bottom:16px; width:100%; justify-content:center; background:rgba(0,0,0,0.2); border-color:var(--border);">
-          <span class="indicator" id="ble-nvs-indicator"></span> <span>Not connected</span>
+        <div id="nvs-status-bar" class="status-badge" style="margin-bottom:16px; width:100%; justify-content:center; background:rgba(0,0,0,0.2); border-color:var(--border);">
+          <span class="indicator" id="nvs-status-indicator"></span> <span id="nvs-status-text">Not connected</span>
         </div>
 
         <div class="form-group" style="margin-bottom:12px;">
@@ -591,7 +595,7 @@
                 <option value="new">New Driver (-650 to 650)</option>
             </select>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
           <div class="form-group">
             <label>Min PWM</label>
             <input type="number" id="nvs-min-pwm" placeholder="-255" />
@@ -601,6 +605,15 @@
             <input type="number" id="nvs-max-pwm" placeholder="255" />
           </div>
         </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+            <label>Robot / Encoder Type</label>
+            <select id="nvs-robot-type">
+                <option value="0">Magnetic (ISR)</option>
+                <option value="1">Optical (PCNT)</option>
+            </select>
+        </div>
+
         <div class="form-group" style="margin-top:12px;">
             <label>Device ID (Max 15 chars)</label>
             <input type="text" id="nvs-ble-device-id" maxlength="15" placeholder="e.g. BonicBotA1002" />
@@ -1232,7 +1245,7 @@
 
     el('btn-ble-update').addEventListener('click', handleBleUpdate);
 
-    // --- Live NVS Control (BLE) Architecture ---
+    // --- Live NVS Control (Unified BLE + USB) Architecture ---
     const CTRL_SERVICE_UUID = "00010000-0000-1000-8000-00805f9b34fb";
     const CTRL_CHAR_UUID    = "00010001-0000-1000-8000-00805f9b34fb";
     const FB_SERVICE_UUID   = "00020000-0000-1000-8000-00805f9b34fb";
@@ -1242,17 +1255,42 @@
     const OTA_SERVICE_UUID  = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const OTA_VERSION_UUID  = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
 
+    let nvsInterface = null; // 'ble' or 'usb'
+    let activeFwVersion = "Unknown";
     let nvsBleDevice = null;
     let nvsCtrlChar = null;
     let nvsFbChar = null;
+    
+    let nvsSerialPort = null;
+    let nvsSerialReader = null;
+    let nvsSerialWriter = null;
+    let serialBuffer = new Uint8Array(0);
+
+    const updateNvsStatus = (status, text) => {
+        const elStatus = el('nvs-status-bar');
+        const elIndicator = el('nvs-status-indicator');
+        const elText = el('nvs-status-text');
+        
+        if (elStatus) elStatus.className = `status-badge ${status}`;
+        if (elIndicator) elIndicator.className = `indicator ${status === 'success' ? 'online' : (status === 'info' ? 'syncing' : 'offline')}`;
+        if (elText) elText.innerHTML = text;
+    };
+
+    async function handleNvsConnect() {
+        const mode = el('nvs-connection-mode').value;
+        nvsInterface = mode;
+        
+        if (mode === 'ble') {
+            await connectBleNvs();
+        } else {
+            await connectUsbNvs();
+        }
+    }
 
     async function connectBleNvs() {
-        const statusEl = el('ble-nvs-status');
-        const writeBtn = el('btn-ble-nvs-write');
         try {
             if (!navigator.bluetooth) throw new Error("Web Bluetooth not supported.");
-            statusEl.className = "status-badge info";
-            statusEl.textContent = "Requesting Bluetooth Device...";
+            updateNvsStatus('info', "Requesting Bluetooth Device...");
             
             nvsBleDevice = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
@@ -1260,56 +1298,133 @@
             });
 
             nvsBleDevice.addEventListener('gattserverdisconnected', () => {
-                statusEl.className = "status-badge warning";
-                statusEl.innerHTML = "Disconnected \u2014 device out of range or rebooted";
-                writeBtn.disabled = true;
+                updateNvsStatus('warning', "Disconnected — device out of range");
+                el('btn-nvs-write').disabled = true;
                 nvsCtrlChar = null;
             });
 
-            statusEl.textContent = "Connecting to GATT...";
+            updateNvsStatus('info', "Connecting to GATT...");
             const server = await nvsBleDevice.gatt.connect();
 
-            statusEl.textContent = "Locating Control Service...";
+            updateNvsStatus('info', "Locating Services...");
             const ctrlService = await server.getPrimaryService(CTRL_SERVICE_UUID);
             nvsCtrlChar = await ctrlService.getCharacteristic(CTRL_CHAR_UUID);
 
-            statusEl.textContent = "Locating Feedback Service...";
             const fbService = await server.getPrimaryService(FB_SERVICE_UUID);
             nvsFbChar = await fbService.getCharacteristic(FB_CHAR_UUID);
 
-            statusEl.textContent = "Subscribing to Notifications...";
             await nvsFbChar.startNotifications();
-            nvsFbChar.addEventListener('characteristicvaluechanged', handleFbNotification);
+            nvsFbChar.addEventListener('characteristicvaluechanged', (e) => handleBinaryPacket(e.target.value));
 
-            window.activeBotFwVersion = "Unknown";
+            activeFwVersion = "Unknown";
             try {
-                statusEl.textContent = "Checking Firmware Version...";
                 const otaService = await server.getPrimaryService(OTA_SERVICE_UUID);
                 const versionChar = await otaService.getCharacteristic(OTA_VERSION_UUID);
                 const val = await versionChar.readValue();
-                window.activeBotFwVersion = new TextDecoder('utf-8').decode(val);
+                activeFwVersion = new TextDecoder('utf-8').decode(val);
             } catch(versionErr) {
-                console.warn("Could not read FW version. Ensure device exposes it.", versionErr);
+                console.warn("Could not read FW version over BLE:", versionErr);
             }
 
-            statusEl.className = "status-badge success";
-            statusEl.textContent = `Connected (FW: ${window.activeBotFwVersion})`;
-            
-            writeBtn.disabled = false;
-
-            // Send standard Read Request (0x07)
+            updateNvsStatus('success', `Connected via BLE (FW: ${activeFwVersion})`);
+            el('btn-nvs-write').disabled = false;
             await sendReadRequest();
-
         } catch(e) {
-            statusEl.className = "status-badge warning";
-            statusEl.textContent = "Error: " + e.message;
+            updateNvsStatus('warning', "BLE Error: " + e.message);
             console.error(e);
         }
     }
 
-    function handleFbNotification(event) {
-        const value = event.target.value; // DataView
-        // Minimum header payload length is 5 for RESP_ACK. For RESP_NVS_CONFIG it is 25.
+    async function connectUsbNvs() {
+        try {
+            if (!navigator.serial) throw new Error("WebSerial not supported in this browser.");
+            updateNvsStatus('info', "Requesting Serial Port...");
+            
+            nvsSerialPort = await navigator.serial.requestPort();
+            await nvsSerialPort.open({ baudRate: 115200 });
+            
+            nvsSerialWriter = nvsSerialPort.writable.getWriter();
+            
+            // Start the read loop without blocking
+            readSerialLoop();
+            
+            activeFwVersion = "N/A (Serial)";
+            updateNvsStatus('success', "Connected via USB");
+            el('btn-nvs-write').disabled = false;
+            
+            // Give the device a moment to stabilize after connection
+            setTimeout(sendReadRequest, 500);
+        } catch(e) {
+            updateNvsStatus('warning', "USB Error: " + e.message);
+            console.error(e);
+        }
+    }
+
+    async function readSerialLoop() {
+        while (nvsSerialPort && nvsSerialPort.readable) {
+            const reader = nvsSerialPort.readable.getReader();
+            nvsSerialReader = reader;
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    if (value) onSerialData(value);
+                }
+            } catch (error) {
+                console.error("Serial read error:", error);
+                break;
+            } finally {
+                reader.releaseLock();
+                nvsSerialReader = null;
+            }
+        }
+    }
+
+    function onSerialData(data) {
+        // Append to existing buffer
+        let newBuf = new Uint8Array(serialBuffer.length + data.length);
+        newBuf.set(serialBuffer);
+        newBuf.set(data, serialBuffer.length);
+        serialBuffer = newBuf;
+
+        // Process all complete packets in the buffer
+        while (serialBuffer.length >= 5) {
+            let headerIdx = -1;
+            for (let i = 0; i < serialBuffer.length - 1; i++) {
+                if (serialBuffer[i] === 0xAA && serialBuffer[i+1] === 0x55) {
+                    headerIdx = i;
+                    break;
+                }
+            }
+
+            if (headerIdx === -1) {
+                // No header found, keep only the last byte (might be the start of AA 55)
+                serialBuffer = serialBuffer.slice(serialBuffer.length - 1);
+                break;
+            }
+
+            if (headerIdx > 0) {
+                serialBuffer = serialBuffer.slice(headerIdx);
+            }
+
+            if (serialBuffer.length < 5) break;
+
+            const type = serialBuffer[2];
+            const len = serialBuffer[3] | (serialBuffer[4] << 8);
+
+            if (serialBuffer.length < 5 + len) {
+                // Packet incomplete, wait for more data
+                break;
+            }
+
+            const packet = serialBuffer.slice(0, 5 + len);
+            serialBuffer = serialBuffer.slice(5 + len);
+            
+            handleBinaryPacket(new DataView(packet.buffer, packet.byteOffset, packet.byteLength));
+        }
+    }
+
+    function handleBinaryPacket(value) {
         if (value.byteLength < 5) return;
         
         const h1 = value.getUint8(0);
@@ -1319,113 +1434,95 @@
         if (h1 !== 0xAA || h2 !== 0x55) return;
         
         if (type === 0x5B) { // RESP_NVS_CONFIG
-            if (value.byteLength >= 25) { 
+            if (value.byteLength >= 26) { // 5 header + 21 payload
                 const min_pwm = value.getInt16(5, true);
                 const max_pwm = value.getInt16(7, true);
+                const robot_type = value.getUint8(9);
                 
-                // Extract null-terminated string up to 16 chars
                 let dev_id = "";
                 for (let i = 0; i < 16; i++) {
-                    const charCode = value.getUint8(9 + i);
+                    const charCode = value.getUint8(10 + i);
                     if (charCode === 0) break;
                     dev_id += String.fromCharCode(charCode);
                 }
                 
                 el('nvs-min-pwm').value = min_pwm;
                 el('nvs-max-pwm').value = max_pwm;
+                el('nvs-robot-type').value = robot_type;
                 el('nvs-ble-device-id').value = dev_id;
                 
                 checkProfileMatch();
-                
-            const statusEl = el('ble-nvs-status');
-            const indicator = el('ble-nvs-indicator');
-            
-            statusEl.className = "status-badge success";
-            statusEl.style.width = "100%";
-            statusEl.innerHTML = `<span class="indicator online"></span> Loaded config from <b>${dev_id}</b> (FW: ${window.activeBotFwVersion})`;
-            if (indicator) indicator.className = "indicator online";
-        }
+                updateNvsStatus('success', `Loaded: <b>${dev_id}</b> (FW: ${activeFwVersion})`);
+            }
         }
     }
 
-    async function sendReadRequest() {
-        if (!nvsCtrlChar) return;
-        try {
-            // Build 10-byte request payload: AA 55 07 05 00 09 00 00 00 00
-            const buffer = new ArrayBuffer(10);
-            const vw = new DataView(buffer);
-            vw.setUint8(0, 0xAA);
-            vw.setUint8(1, 0x55);
-            vw.setUint8(2, 0x07);   // CMD_DATA_REQUEST
-            vw.setUint16(3, 5, true); // Payload length
-            vw.setUint8(5, 0x09);   // dataType = DATA_NVS_CONFIG
-            vw.setUint8(6, 0x00);   // mode = REQ_ONCE
-            vw.setUint16(7, 0, true); // interval = 0
-            vw.setUint8(9, 0x00);   // id = 0
-
-            // Try default write, fallback gracefully
+    async function sendPacket(buffer) {
+        if (nvsInterface === 'ble' && nvsCtrlChar) {
             try {
                await nvsCtrlChar.writeValueWithResponse(buffer); 
             } catch (err) {
                await nvsCtrlChar.writeValueWithoutResponse(buffer);
             }
-        } catch (e) {
-            console.error("Read request failed", e);
+        } else if (nvsInterface === 'usb' && nvsSerialWriter) {
+            await nvsSerialWriter.write(new Uint8Array(buffer));
         }
     }
 
-    async function sendWriteConfig() {
-        if (!nvsCtrlChar) return;
-        const statusEl = el('ble-nvs-status');
-        statusEl.className = "status-badge info";
-        statusEl.textContent = "Writing config...";
+    async function sendReadRequest() {
+        const buffer = new ArrayBuffer(10);
+        const vw = new DataView(buffer);
+        vw.setUint8(0, 0xAA);
+        vw.setUint8(1, 0x55);
+        vw.setUint8(2, 0x07);   // CMD_DATA_REQUEST
+        vw.setUint16(3, 5, true); // Payload length
+        vw.setUint8(5, 0x09);   // dataType = DATA_NVS_CONFIG
+        vw.setUint8(6, 0x00);   // mode = REQ_ONCE
+        vw.setUint16(7, 0, true); // interval = 0
+        vw.setUint8(9, 0x00);   // id = 0
+        
+        await sendPacket(buffer);
+    }
 
+    async function sendWriteConfig() {
+        updateNvsStatus('info', "Writing config...");
         try {
             const min_pwm = parseInt(el('nvs-min-pwm').value) || 0;
             const max_pwm = parseInt(el('nvs-max-pwm').value) || 0;
+            const robot_type = parseInt(el('nvs-robot-type').value) || 0;
             let dev_id = el('nvs-ble-device-id').value.trim();
             
-            // Build 25-byte payload
-            const buffer = new ArrayBuffer(25);
+            const buffer = new ArrayBuffer(26); // 5 header + 21 payload
             const vw = new DataView(buffer);
             
             vw.setUint8(0, 0xAA);
             vw.setUint8(1, 0x55);
             vw.setUint8(2, 0x09); // CMD_UPDATE_NVS
-            vw.setUint16(3, 20, true); // Payload length: 20
+            vw.setUint16(3, 21, true); // Payload length 21
             
-            vw.setInt16(5, min_pwm, true); // LSB/MSB
-            vw.setInt16(7, max_pwm, true); // LSB/MSB
+            vw.setInt16(5, min_pwm, true);
+            vw.setInt16(7, max_pwm, true);
+            vw.setUint8(9, robot_type);
             
             for (let i = 0; i < 16; i++) {
                 if (i < dev_id.length) {
-                    vw.setUint8(9 + i, dev_id.charCodeAt(i));
+                    vw.setUint8(10 + i, dev_id.charCodeAt(i));
                 } else {
-                    vw.setUint8(9 + i, 0); // Null padding
+                    vw.setUint8(10 + i, 0);
                 }
             }
             
-            try {
-               await nvsCtrlChar.writeValueWithResponse(buffer);
-            } catch (err) {
-               await nvsCtrlChar.writeValueWithoutResponse(buffer);
-            }
-            
-            statusEl.className = "status-badge success";
-            statusEl.textContent = "Config Saved Successfully!";
-            
-            // Verify by actively requesting the updated NVS struct
+            await sendPacket(buffer);
+            updateNvsStatus('success', "Config Saved Successfully!");
             setTimeout(sendReadRequest, 500);
-            
         } catch (e) {
-            statusEl.className = "status-badge warning";
-            statusEl.textContent = "Save failed: " + e.message;
+            updateNvsStatus('warning', "Save failed: " + e.message);
             console.error(e);
         }
     }
 
-    el('btn-ble-nvs-connect').addEventListener('click', connectBleNvs);
-    el('btn-ble-nvs-write').addEventListener('click', sendWriteConfig);
+    el('btn-nvs-connect').addEventListener('click', handleNvsConnect);
+    el('btn-nvs-write').addEventListener('click', sendWriteConfig);
 
     function checkProfileMatch() {
         const minVal = parseInt(el('nvs-min-pwm').value);
@@ -1448,6 +1545,7 @@
             el('nvs-min-pwm').value = -650;
             el('nvs-max-pwm').value = 650;
         }
+        checkProfileMatch();
     });
 
     el('nvs-min-pwm').addEventListener('input', checkProfileMatch);
